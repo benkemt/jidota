@@ -17,7 +17,7 @@ Every task and milestone is a vertical slice: a usable outcome that runs through
 ## Process
 
 1. Read the source, the repository instructions (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or equivalents), and the relevant code. Record the base commit with `git rev-parse --short HEAD`. When the source is a spec written with the `spec` skill:
-   - stop and say so if its `decision_status` is not `Accepted` or if it has a blocking open decision;
+   - stop and say so if it has a blocking open decision;
    - start from its Codebase pointers and verify them at the current commit instead of searching again; if `base_commit` differs from `HEAD`, check only the cited files with `git diff --stat <base_commit> HEAD -- <paths>`;
    - take its contracts, examples, and `assumed` defaults as decided.
 2. While reading, note for each future task:

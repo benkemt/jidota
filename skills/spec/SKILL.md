@@ -46,8 +46,6 @@ Omit any section or field that adds nothing for this change. Aim for 300 to 1,20
 ```yaml
 source: <ADO #id and children, GitHub issue URL, or document path>
 base_commit: <short sha>
-decision_status: Draft | In review | Accepted
-delivery_status: Not started | In progress | Delivered
 ```
 
 ## Outcome and scope
@@ -128,12 +126,7 @@ Return the spec in chat, ready to paste into the source work item or issue. Writ
 
 `plan-tickets` links the spec from every task, so the spec needs a durable location: a work item, an issue, or a committed file. If it stays in chat, say that the planner will have to copy its decisions into the tasks.
 
-## Lifecycle
-
-- `decision_status`: `Draft` while questions are open, `In review` when ready, `Accepted` once the reviewer approves. Only an `Accepted` spec with no blocking open decision goes to `plan-tickets`.
-- `delivery_status`: update it as tasks progress. When `Delivered`, link the pull requests and the proof. Never claim that a check passed if it was not run.
-- A consequential change during delivery updates the spec and adds one line: `Changed during delivery: <what>, <why>, <pull request>`. Keep the earlier reasoning.
-- After delivery, the spec remains the record of the feature's decisions. Lasting product and system rules move to the requirements and the architecture.
+The spec carries no status. Approval and delivery are tracked by the orchestrator on the work item, not in the spec.
 
 ## Return
 
@@ -143,4 +136,4 @@ Return, in this order:
 2. The spec.
 3. The main decision and its tradeoff, in two sentences.
 4. The blocking questions, or `None`.
-5. The next step: once the spec is `Accepted`, run `/jidota:plan-tickets <spec location>`.
+5. The next step: once no blocking open decision remains, run `/jidota:plan-tickets <spec location>`.
