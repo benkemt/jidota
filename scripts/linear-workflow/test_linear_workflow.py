@@ -24,10 +24,11 @@ def state(name, type_, position, description=None, id_=None):
 class FakeLinear:
     """Records calls and keeps the team's statuses and issues in memory."""
 
-    def __init__(self, states, issues=None, archive_fails=False):
+    def __init__(self, states, issues=None, archive_fails=False, reserved=()):
         self.states = [dict(s) for s in states]
         self.issues = issues or {}  # state id -> [issue ids]
         self.archive_fails = archive_fails
+        self.reserved = set(reserved)  # state ids Linear refuses to update
         self.calls = []
 
     def find_team(self, ref):
@@ -44,6 +45,8 @@ class FakeLinear:
 
     def update_state(self, state_id, changes):
         self.calls.append(("update", state_id, changes))
+        if state_id in self.reserved:
+            raise lw.LinearError("unable to update reserved state")
         next(s for s in self.states if s["id"] == state_id).update(changes)
 
     def archive_state(self, state_id):
@@ -90,6 +93,11 @@ class PlanTest(unittest.TestCase):
         current.append(state("Closed", "completed", 9))
         self.assertEqual(self.kinds(lw.plan(SPEC, current))[-1], ("extra", "Closed"))
 
+    def test_reserved_status_is_only_checked(self):
+        spec = [{"name": "Duplicate", "type": "duplicate", "color": "#95a2b3", "description": "Duplicate."}]
+        self.assertEqual(lw.plan(spec, [state("Duplicate", "duplicate", 7, None)])[0].kind, "ok")
+        self.assertEqual(lw.plan(spec, [])[0].kind, "missing")
+
     def test_description_left_out_of_the_file_is_not_touched(self):
         spec = [{"name": "Backlog", "type": "backlog", "color": "#bec2c8"}]
         self.assertEqual(lw.plan(spec, [state("Backlog", "backlog", 0, "kept")])[0].kind, "ok")
@@ -114,6 +122,19 @@ class ApplyTest(unittest.TestCase):
         warnings = lw.apply(fake, "team-1", actions)
         self.assertEqual(len(warnings), 1)
         self.assertIn("PR Review (replaced)", warnings[0])
+
+    def test_reserved_update_error_is_a_warning_and_the_rest_continues(self):
+        fake = FakeLinear([state("Backlog", "backlog", 3), state("Ready", "unstarted", 9)], reserved={"id-Backlog"})
+        warnings = lw.apply(fake, "team-1", lw.plan(SPEC[:2], fake.list_states("team-1")))
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("reserved", warnings[0])
+        self.assertEqual([c[1] for c in fake.calls if c[0] == "update"], ["id-Backlog", "id-Ready"])
+
+    def test_other_update_error_stops(self):
+        fake = FakeLinear([state("Backlog", "backlog", 3)])
+        fake.update_state = mock.Mock(side_effect=lw.LinearError("forbidden"))
+        with self.assertRaisesRegex(lw.LinearError, "forbidden"):
+            lw.apply(fake, "team-1", lw.plan(SPEC[:1], fake.list_states("team-1")))
 
     def test_extra_status_is_never_changed(self):
         fake = FakeLinear([state("Closed", "completed", 9)])
@@ -163,7 +184,9 @@ class MainTest(unittest.TestCase):
         fake = FakeLinear([])
         code, _, _ = self.run_main(fake, "--apply")
         self.assertEqual(code, 0)
-        self.assertEqual(len([c for c in fake.calls if c[0] == "create"]), 9)
+        created = [c[1] for c in fake.calls if c[0] == "create"]
+        self.assertEqual(len(created), 8)
+        self.assertNotIn("Duplicate", created)  # reserved: reported as missing, never created
 
     def test_missing_api_key_stops(self):
         with mock.patch.dict("os.environ", {}, clear=True), redirect_stderr(io.StringIO()):

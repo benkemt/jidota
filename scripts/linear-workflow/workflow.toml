@@ -6,6 +6,7 @@
 #
 # type: backlog | unstarted | started | completed | canceled | duplicate
 # color: used only when the status is created; colors changed in Linear are kept.
+# A "duplicate" status is reserved by Linear: the script only checks that it exists.
 
 [[status]]
 name = "Backlog"

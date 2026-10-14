@@ -8,6 +8,7 @@ Sets up the JidoTa workflow statuses (see [Workflow](../../README.md#workflow)) 
 | Wrong order, description, or name case | Updates it. The color you set in Linear is kept. |
 | Wrong type | Linear cannot change the type of a status, so the script renames the old one `<name> (replaced)`, creates the right one, moves its issues, and archives the old one. |
 | Not in the file | Only reports it. |
+| Reserved by Linear (`duplicate`) | Only checks that it exists: Linear refuses changes to it. |
 
 ## Run
 

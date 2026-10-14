@@ -34,6 +34,9 @@ API_URL = "https://api.linear.app/graphql"
 DEFAULT_CONFIG = Path(__file__).with_name("workflow.toml")
 STATUS_TYPES = {"backlog", "unstarted", "started", "completed", "canceled", "duplicate"}
 REPLACED_SUFFIX = " (replaced)"
+# Linear manages these statuses itself and refuses to update them: the script
+# only checks that they exist.
+RESERVED_TYPES = {"duplicate"}
 
 
 class LinearError(Exception):
@@ -188,7 +191,7 @@ def load_config(path: Path) -> list[dict]:
 
 @dataclass
 class Action:
-    kind: str  # "ok" | "create" | "update" | "replace" | "extra"
+    kind: str  # "ok" | "create" | "update" | "replace" | "extra" | "missing"
     spec: dict | None = None
     state: dict | None = None
     position: float = 0.0
@@ -206,7 +209,10 @@ def plan(desired: list[dict], current: list[dict]) -> list[Action]:
     for index, spec in enumerate(desired):
         position = float(index)
         state = by_name.pop(spec["name"].casefold(), None)
-        if state is None:
+        if spec["type"] in RESERVED_TYPES:
+            kind = "ok" if state is not None and state["type"] == spec["type"] else "missing"
+            actions.append(Action(kind, spec=spec, state=state, position=position))
+        elif state is None:
             actions.append(Action("create", spec=spec, position=position))
         elif state["type"] != spec["type"]:
             actions.append(Action("replace", spec=spec, state=state, position=position))
@@ -237,6 +243,8 @@ def describe(action: Action, issue_count: int | None = None) -> str:
             f"replace  {action.name}: type {action.state['type']} -> {action.spec['type']}"
             f" (create new{moved}, archive old)"
         )
+    if action.kind == "missing":
+        return f"missing  {action.name} ({action.spec['type']}): reserved by Linear, set it up by hand"
     return f"extra    {action.name} ({action.state['type']}): not in the JidoTa workflow, left as is"
 
 
@@ -250,7 +258,12 @@ def apply(linear: Linear, team_id: str, actions: list[Action]) -> list[str]:
         if action.kind == "create":
             linear.create_state(team_id, action.spec, action.position)
         elif action.kind == "update":
-            linear.update_state(action.state["id"], action.changes)
+            try:
+                linear.update_state(action.state["id"], action.changes)
+            except LinearError as error:
+                if "reserved" not in str(error).lower():
+                    raise
+                warnings.append(f"{action.name!r} is reserved by Linear and was left as is ({error})")
         elif action.kind == "replace":
             old = action.state
             linear.update_state(old["id"], {"name": old["name"] + REPLACED_SUFFIX})
