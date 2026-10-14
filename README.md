@@ -85,6 +85,8 @@ Principles:
 - **Technical failures also go to "Stalled"**, with the cause attached: no ticket ever gets stuck in progress.
 - **Rework loop**: a rejected pull request sends the ticket back to "Ready" with the reviewer's feedback, which becomes part of the next run's context.
 
+To set up these statuses in a Linear team, run [`scripts/linear-workflow`](scripts/linear-workflow/README.md).
+
 The agent review step (a second agent checks the work before the human does) is built into `task-to-pr`. Optional, as volume grows: a separate **agent failed** status to distinguish unclear specifications from technical failures.
 
 ## Measurement

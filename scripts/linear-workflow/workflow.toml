@@ -1,0 +1,62 @@
+# JidoTa workflow statuses, in board order.
+#
+# linear_workflow.py creates the missing statuses, fixes the order and the
+# descriptions, and recreates a status whose type is wrong. Statuses of the
+# team that are not listed here are only reported.
+#
+# type: backlog | unstarted | started | completed | canceled | duplicate
+# color: used only when the status is created; colors changed in Linear are kept.
+
+[[status]]
+name = "Backlog"
+type = "backlog"
+color = "#bec2c8"
+description = "Not ready. Nobody acts."
+
+[[status]]
+name = "Review"
+type = "unstarted"
+color = "#bb87fc"
+description = "The human checks that the ticket has no blocking point, then moves it to Ready."
+
+[[status]]
+name = "Ready"
+type = "unstarted"
+color = "#e2e2e2"
+description = "Approved for agent work. The orchestrator picks it up."
+
+[[status]]
+name = "In Progress"
+type = "started"
+color = "#f2c94c"
+description = "Locked by the orchestrator. The agent is working."
+
+[[status]]
+name = "Stalled"
+type = "started"
+color = "#eb5757"
+description = "The agent stopped on a doubt or a technical failure. The human unblocks it."
+
+[[status]]
+name = "PR Review"
+type = "started"
+color = "#4cb782"
+description = "The agent finished and opened a pull request. The human reviews it."
+
+[[status]]
+name = "Done"
+type = "completed"
+color = "#5e6ad2"
+description = "The pull request was reviewed and merged."
+
+[[status]]
+name = "Canceled"
+type = "canceled"
+color = "#95a2b3"
+description = "Abandoned."
+
+[[status]]
+name = "Duplicate"
+type = "duplicate"
+color = "#95a2b3"
+description = "Duplicate of another ticket."
