@@ -126,7 +126,9 @@ claude --plugin-dir <path-to-the-repository>
 
 | `/jidota:test` | Proves that an implementation meets its acceptance criteria, criterion by criterion, with focused automated checks and a real browser for browser-facing work. |
 
-Run `spec` first when decisions are still open, then `plan-tickets` on the reviewed spec, then `test` on each ticket the agent implements.
+| `/jidota:review` | Reviews the change made for one ticket with a reviewer that did not implement it, and returns prioritized findings and a verdict (Approve, Request changes, or Blocked). |
+
+Run `spec` first when decisions are still open, then `plan-tickets` on the reviewed spec. For each ticket the agent implements, run `test`, then `review`.
 
 ## License
 
