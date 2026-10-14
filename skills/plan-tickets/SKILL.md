@@ -1,5 +1,5 @@
 ---
-name: plan-agent-tasks
+name: plan-tickets
 description: "Turns a reviewed spec or decided brief into ordered, self-contained tasks that autonomous agents execute in separate runs with minimal exploration and trial and error. Use for implementation tasks, tracker tickets, or milestones meant for agent execution. Do not use for a single coding task or its short execution outline."
 user-invocable: true
 argument-hint: "<spec, brief, issue, or request>"
@@ -16,14 +16,17 @@ Every task and milestone is a vertical slice: a usable outcome that runs through
 
 ## Process
 
-1. Read the source, the repository instructions (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or equivalents), and the relevant code. Record the base commit with `git rev-parse --short HEAD`.
+1. Read the source, the repository instructions (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or equivalents), and the relevant code. Record the base commit with `git rev-parse --short HEAD`. When the source is a spec written with the `spec` skill:
+   - stop and say so if its `decision_status` is not `Accepted` or if it has a blocking open decision;
+   - start from its Codebase pointers and verify them at the current commit instead of searching again; if `base_commit` differs from `HEAD`, check only the cited files with `git diff --stat <base_commit> HEAD -- <paths>`;
+   - take its contracts, examples, and `assumed` defaults as decided.
 2. While reading, note for each future task:
    - the entry points: files, symbols, and the test file to extend;
    - an existing example in the repository that the agent should imitate;
    - the narrowest test command that covers the change;
    - prerequisites: tools, services, credentials, permissions, and test data;
    - pitfalls: generated files, flaky tests, encoding, path or platform quirks.
-3. Stop and return to `/spec` if an unresolved choice would change behavior, interfaces, data, security, scale, performance, compatibility, operations, cost, or proof. If only an experiment can answer a technical unknown, create a spike task. It asks one precise question, sets a time limit, and says what form the answer takes.
+3. Stop and send the source back to the `spec` skill (`/jidota:spec`) if an unresolved choice would change behavior, interfaces, data, security, scale, performance, compatibility, operations, cost, or proof. If only an experiment can answer a technical unknown, create a spike task. It asks one precise question, sets a time limit, and says what form the answer takes.
 4. Split the work into tasks. Each one delivers working behavior, fits one agent run (see Sizing), and produces one focused pull request.
 5. Keep each shared contract in one task. That task fixes the exact signatures, schemas, file formats, and error messages. Later tasks depend on it and refer to it. Two tasks must never answer the same question independently.
 6. Put refactoring in its own task when it would hide a behavior change.
@@ -126,6 +129,7 @@ In one or two short sentences, explain the practical value to a user, operator, 
 - Do not let two tasks in the same parallel group touch the same files.
 - Do not give an agent a task that needs a [HUMAN] prerequisite before that prerequisite is done. Say so in the plan.
 - Every Done when item has a proof in How to check, and every check states its expected result.
+- When the source is a spec, every one of its `AC-n` appears in the Done when of at least one task. Say in the plan which task covers which `AC-n`.
 
 ## Review passes
 
