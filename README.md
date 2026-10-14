@@ -123,12 +123,11 @@ claude --plugin-dir <path-to-the-repository>
 |---|---|
 | `/jidota:spec` | Settles one feature or consequential change before delivery: required behavior, technical design, failure handling, and acceptance checks. |
 | `/jidota:plan-tickets` | Turns a reviewed spec or decided brief into ordered, self-contained tasks that autonomous agents execute in separate runs. |
-
+| `/jidota:task-to-pr` | Implements one ticket, with its linked spec, as a tested and independently reviewed pull request, and reports done or blocked. Never merges. |
 | `/jidota:test` | Proves that an implementation meets its acceptance criteria, criterion by criterion, with focused automated checks and a real browser for browser-facing work. |
-
 | `/jidota:review` | Reviews the change made for one ticket with a reviewer that did not implement it, and returns prioritized findings and a verdict (Approve, Request changes, or Blocked). |
 
-Run `spec` first when decisions are still open, then `plan-tickets` on the reviewed spec. For each ticket the agent implements, run `test`, then `review`.
+Run `spec` first when decisions are still open, then `plan-tickets` on the reviewed spec, then `task-to-pr` on each approved ticket. `task-to-pr` runs `test` and `review` itself; both can also run on their own.
 
 ## License
 

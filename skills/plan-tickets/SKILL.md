@@ -98,7 +98,7 @@ In one or two short sentences, explain the practical value to a user, operator, 
 - Decisions: <only the decisions, definitions, and failure rules specific to this task>
 - Examples: <input → expected output, including error cases, as a small table when there are several>
 - Pitfalls: <traps found while planning>
-- Stop if: <assumption that could be false> → comment on the ticket with what you found and stop. Do not work around it.
+- Stop if: <assumption that could be false> → stop and report what you found. Do not work around it.
 - Allowed defaults: <minor choices the agent may make alone; list each one in the pull request description>
 
 ### Out of scope
