@@ -73,15 +73,15 @@ Each status answers one question: **who has to act now?**
 | Waiting | **Ready** | The agent | The human, once Review finds no blocking point |
 | In progress | **In Progress** | The agent | The orchestrator, before dispatch |
 | In progress | **Stalled** | The human | The orchestrator (agent stopped, or technical failure) |
-| In progress | **Done** | The human | The orchestrator (agent finished, pull request open) |
-| Closed | **Closed** | Nobody | The human, after pull request review and merge |
+| In progress | **PR Review** | The human | The orchestrator (agent finished, pull request open) |
+| Closed | **Done** | Nobody | The human, after pull request review and merge |
 | Closed | **Canceled** | Nobody | The human |
 | Closed | **Duplicate** | Nobody | The human |
 
 Principles:
 
 - **One single entry point for the agent**: "Ready". Nothing starts without human approval in "Review".
-- **Three queues for the human**: "Review" (approve the ticket), "Stalled" (unblock it), and "Done" (review the pull request). Together, they are the human's inbox.
+- **Three queues for the human**: "Review" (approve the ticket), "Stalled" (unblock it), and "PR Review" (review the pull request). Together, they are the human's inbox.
 - **Technical failures also go to "Stalled"**, with the cause attached: no ticket ever gets stuck in progress.
 - **Rework loop**: a rejected pull request sends the ticket back to "Ready" with the reviewer's feedback, which becomes part of the next run's context.
 
