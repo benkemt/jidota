@@ -121,7 +121,10 @@ claude --plugin-dir <path-to-the-repository>
 
 | Skill | Use |
 |---|---|
-| `/jidota:plan-agent-tasks` | Turns a reviewed spec or decided brief into ordered, self-contained tasks that autonomous agents execute in separate runs. |
+| `/jidota:spec` | Settles one feature or consequential change before delivery: required behavior, technical design, failure handling, and acceptance checks. |
+| `/jidota:plan-tickets` | Turns an accepted spec or decided brief into ordered, self-contained tasks that autonomous agents execute in separate runs. |
+
+Run `spec` first when decisions are still open, then `plan-tickets` on the accepted spec.
 
 ## License
 
