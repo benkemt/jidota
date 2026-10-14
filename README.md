@@ -104,3 +104,7 @@ This is the root-cause analysis step of Jidoka: every stop is an opportunity to 
 - Stop on doubt rather than implement on assumption.
 - Human review before anything is considered done.
 - Failures are surfaced, never silent.
+
+## License
+
+[MIT](LICENSE)
