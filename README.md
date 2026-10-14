@@ -69,21 +69,23 @@ Each status answers one question: **who has to act now?**
 | Stage | Status | Who acts | Set by |
 |---|---|---|---|
 | Not ready | **Backlog** | Nobody | Creation |
-| Waiting | **Ready for agent** | The agent | The human — the approval step |
-| In progress | **Agent in progress** | The agent | The orchestrator, before dispatch |
-| In progress | **Blocked** | The human | The orchestrator (agent stopped, or technical failure) |
-| In progress | **Needs review** | The human | The orchestrator (agent finished) |
-| Closed | **Done** | Nobody | The human, after review and merge |
+| Approval | **Review** | The human | The human — checks that the ticket has no blocking point |
+| Waiting | **Ready** | The agent | The human, once Review finds no blocking point |
+| In progress | **In Progress** | The agent | The orchestrator, before dispatch |
+| In progress | **Stalled** | The human | The orchestrator (agent stopped, or technical failure) |
+| In progress | **Done** | The human | The orchestrator (agent finished, pull request open) |
+| Closed | **Closed** | Nobody | The human, after pull request review and merge |
 | Closed | **Canceled** | Nobody | The human |
+| Closed | **Duplicate** | Nobody | The human |
 
 Principles:
 
-- **One single entry point for the agent**: "Ready for agent". Nothing starts without human approval.
-- **Two queues for the human**: "Blocked" and "Needs review". Together, they are the human's inbox.
-- **Technical failures also go to "Blocked"**, with the cause attached: no ticket ever gets stuck in progress.
-- **Rework loop**: a rejected review sends the ticket back to "Ready for agent" with the reviewer's feedback, which becomes part of the next run's context.
+- **One single entry point for the agent**: "Ready". Nothing starts without human approval in "Review".
+- **Three queues for the human**: "Review" (approve the ticket), "Stalled" (unblock it), and "Done" (review the pull request). Together, they are the human's inbox.
+- **Technical failures also go to "Stalled"**, with the cause attached: no ticket ever gets stuck in progress.
+- **Rework loop**: a rejected pull request sends the ticket back to "Ready" with the reviewer's feedback, which becomes part of the next run's context.
 
-Optional stages, to add as volume grows: an **agent review** step (a second agent checks the work before the human does), and a separate **agent failed** status to distinguish unclear specifications from technical failures.
+The agent review step (a second agent checks the work before the human does) is built into `task-to-pr`. Optional, as volume grows: a separate **agent failed** status to distinguish unclear specifications from technical failures.
 
 ## Measurement
 
