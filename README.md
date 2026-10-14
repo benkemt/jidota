@@ -113,6 +113,12 @@ This repository is a Claude Code plugin. Its skills live in [`skills/`](skills/)
 /plugin install jidota --marketplace benkemt/jidota
 ```
 
+To test the plugin from a local clone, without installing it:
+
+```
+claude --plugin-dir <path-to-the-repository>
+```
+
 | Skill | Use |
 |---|---|
 | `/jidota:plan-agent-tasks` | Turns a reviewed spec or decided brief into ordered, self-contained tasks that autonomous agents execute in separate runs. |
