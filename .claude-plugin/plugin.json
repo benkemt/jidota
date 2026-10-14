@@ -1,0 +1,12 @@
+{
+  "name": "jidota",
+  "version": "0.1.0",
+  "description": "JidoTa — agentic implementation orchestrator: skills to plan and run work that autonomous agents implement under human control.",
+  "author": {
+    "name": "Benjamin Moiroud"
+  },
+  "homepage": "https://github.com/benkemt/jidota",
+  "repository": "https://github.com/benkemt/jidota",
+  "license": "MIT",
+  "keywords": ["agents", "orchestration", "planning", "tickets"]
+}

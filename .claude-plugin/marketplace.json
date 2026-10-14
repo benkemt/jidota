@@ -1,0 +1,14 @@
+{
+  "name": "jidota",
+  "description": "Skills from the JidoTa project, the agentic implementation orchestrator.",
+  "owner": {
+    "name": "Benjamin Moiroud"
+  },
+  "plugins": [
+    {
+      "name": "jidota",
+      "source": "./",
+      "description": "JidoTa skills: plan and run work that autonomous agents implement under human control."
+    }
+  ]
+}

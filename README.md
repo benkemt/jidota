@@ -105,6 +105,18 @@ This is the root-cause analysis step of Jidoka: every stop is an opportunity to 
 - Human review before anything is considered done.
 - Failures are surfaced, never silent.
 
+## Install the skills
+
+This repository is a Claude Code plugin. Its skills live in [`skills/`](skills/).
+
+```
+/plugin install jidota --marketplace benkemt/jidota
+```
+
+| Skill | Use |
+|---|---|
+| `/jidota:plan-agent-tasks` | Turns a reviewed spec or decided brief into ordered, self-contained tasks that autonomous agents execute in separate runs. |
+
 ## License
 
 [MIT](LICENSE)
