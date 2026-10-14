@@ -24,6 +24,12 @@ A good spec is approved by a reviewer in minutes and cut into tasks by a planner
    - ADO work item: read it with its child work items (title, description, acceptance criteria, discussion, links), with the ADO tools when available, otherwise `az boards work-item show --id <id> --expand relations`, then each child (`System.LinkTypes.Hierarchy-Forward`).
    - GitHub issue: `gh issue view <number> --comments`.
    - Document or chat request: read it as given.
+   - Related items: read every work item, issue, or document that the source links or that its text names, such as a sibling bug whose fix lands in the same place or a dependency. Decide for each one whether this spec delivers it.
+   - Keep a list of every item whose content shaped the spec, with its role:
+     - `scope`: the spec delivers it, so closing the spec closes the item.
+     - `context`: it supplied a fact, a dependency, a constraint, or a non-goal.
+
+     The list goes into `sources`. An item that was read but changed nothing stays off the list.
 2. **Read the repository with a stopping point.** In this order: repository instructions (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or equivalents), then the requirements and architecture documents that the source or the instructions cite, then the code the change touches. Find that code by searching for the names in the source, not by browsing. Stop reading as soon as you can describe the current behavior and where the change goes. Record the base commit with `git rev-parse --short HEAD`. Describe only behavior you have seen in the code.
 3. **Collect codebase pointers while reading**: entry points (files, symbols), the existing pattern to imitate (`path:line`), the test file to extend, the narrowest test command, pitfalls, and files that must not change. They go into the spec so that `plan-tickets` verifies them instead of searching again.
 4. **Sort every open choice:**
@@ -44,7 +50,9 @@ Omit any section or field that adds nothing for this change. Aim for 300 to 1,20
 # <Action and result>
 
 ```yaml
-source: <ADO #id and children, GitHub issue URL, or document path>
+sources:
+  - <ADO #id, GitHub issue URL, or document path> (scope): <title>
+  - <ADO #id, GitHub issue URL, or document path> (context): <title>; <what it supplied>
 base_commit: <short sha>
 ```
 
@@ -111,6 +119,7 @@ Before returning, confirm each point and fix what fails:
 4. Every path, symbol, and command cited exists at `base_commit`.
 5. `plan-tickets` could cut the spec into vertical slices without stopping to ask a product or architecture question.
 6. No fact appears twice, and shared requirements or architecture are linked, not copied.
+7. `sources` lists every item used to build the spec, each with its role and its title. That includes child items, items added to scope after a question, and items cited in the body. Every work item, issue, or document named in the body appears in `sources`.
 
 ## Writing rules
 
@@ -124,6 +133,8 @@ Before returning, confirm each point and fix what fails:
 
 Return the spec in chat, ready to paste into the source work item or issue. Write it into the tracker or a repository file only when the user asks, and say where it went.
 
+When the spec gets its own title (a tracker document, an issue, or a file name), the title names every `scope` item, for example `Spec ADO #1084, #1086 — <subject>`.
+
 `plan-tickets` links the spec from every task, so the spec needs a durable location: a work item, an issue, or a committed file. If it stays in chat, say that the planner will have to copy its decisions into the tasks.
 
 The spec carries no status. Approval and delivery are tracked by the orchestrator on the work item, not in the spec.
@@ -132,7 +143,7 @@ The spec carries no status. Approval and delivery are tracked by the orchestrato
 
 Return, in this order:
 
-1. The source and the base commit.
+1. Every item used, with its role (`scope` or `context`), and the base commit.
 2. The spec.
 3. The main decision and its tradeoff, in two sentences.
 4. The blocking questions, or `None`.
