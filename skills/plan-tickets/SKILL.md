@@ -32,7 +32,7 @@ Every task and milestone is a vertical slice: a usable outcome that runs through
 6. Put refactoring in its own task when it would hide a behavior change.
 7. Order tasks by dependency. Put tasks in the same parallel group when neither depends on the other and their `touches` lists do not overlap.
 8. Group tasks into milestones when useful. Each milestone delivers a usable end-to-end result with acceptance checks and dependencies. Do not use milestones such as "database", "backend", or "frontend".
-9. Before returning, check that every path, symbol, and command you cite exists at the base commit. Run the fast check commands when you can. If a check already fails before any change, say so in the plan, because an agent cannot tell an existing failure from one it caused.
+9. Before returning, check that every path, symbol, and command you cite exists at the base commit, then run each task's `check_fast` and `check_full` there. Each one must succeed before any change; a test filter that matches no test yet is fine when all its tests are new. When a command already fails, replace it with one that succeeds, such as the per-project commands the CI runs. If none exists, write the expected failure into the task and say so in the plan, because an agent cannot tell an existing failure from one it caused.
 10. Return the plan in chat. Create tracker tickets only when the user asks. Never write a plan document.
 11. Stop after planning. Do not implement.
 
@@ -70,6 +70,7 @@ id: T3
 depends_on: [T1]
 parallel_group: B
 base_commit: <short sha>
+start_branch: <branch the work starts from and the pull request targets, when it is not the remote default branch>
 touches: [<paths or globs this task changes>]
 check_fast: <narrowest command, run often>
 check_full: <full command, run once before the pull request>
@@ -82,10 +83,10 @@ In one to three short sentences, say what is wrong or missing and what will work
 In one or two short sentences, explain the practical value to a user, operator, or developer.
 
 ### Done when
-- Three to seven observable results. Each one is proven by an item in How to check.
+- Three to seven observable results. Each one is proven by an item in How to check. Mark each one `[new]` when the behavior does not exist yet, or `[kept]` when the change must not break it.
 
 ### How to check
-- Fast: `<check_fast>`, with the expected result.
+- Fast: `<check_fast>`, which runs only this task's tests. Before the change: each `[new]` test fails on its assertion, with the reason (for example `header X-Content-Type-Options missing`), and each `[kept]` test passes. After the change: all pass.
 - Full: `<check_full>`, with the expected result.
 - Manual: exact steps and the expected observation, only when automation cannot cover the behavior.
 
@@ -129,17 +130,27 @@ In one or two short sentences, explain the practical value to a user, operator, 
 - Do not let two tasks in the same parallel group touch the same files.
 - Do not give an agent a task that needs a [HUMAN] prerequisite before that prerequisite is done. Say so in the plan.
 - Every Done when item has a proof in How to check, and every check states its expected result.
-- When the source is a spec, every one of its `AC-n` appears in the Done when of at least one task. Say in the plan which task covers which `AC-n`.
+- When the source is a spec, every one of its `AC-n` appears in the Done when of at least one task, agent or `[HUMAN]`. Say in the plan which task covers which `AC-n`.
 
 ## Review passes
 
-Read each task three times before returning the plan:
+Read each task four times before returning the plan:
 
 1. Human pass: can someone explain what will change and why after reading only the title and the first two sections?
 2. Agent pass: can a fresh agent find the source, the dependencies, and the fixed decisions, implement the task, and prove it without asking a product or architecture question?
 3. Cost pass: can a fresh agent start editing within a few minutes, without open-ended searching? If not, add the missing pointer, example, or command.
+4. Readiness pass: answer each question below with evidence from the code or a command, and fix the task until every answer is yes.
+   - **Proof.** Can an agent prove every Done when item with a command, or with a test whose location is given and that fails if the behavior breaks? A criterion only a human can prove (a security scan, production access, a manual start, a visual judgment, a sign-off) goes into a separate `[HUMAN]` task that depends on this one, never into an agent task's Done when. When the spec's proof of an `AC-n` has a part this task does not run, say where that part is covered.
+   - **Touches.** Walk through the change up to the first edit, for each Done when item. Is every file it needs in `touches`: types the tests must see, registrations, project files, migrations, fixtures, shared test setup? When the task must not change a shared file, say how to work without it, for example by configuring the test host instead of editing the shared fixture.
+   - **Allowed defaults.** Does every choice an Allowed default leaves open stay inside `touches`? When a default lets the agent pick a name or a folder, `touches` uses a glob that covers every allowed choice.
+   - **Red first.** Is every Done when item marked `[new]` or `[kept]`? Does `check_fast` select only this task's tests, and does How to check say why each `[new]` test fails before the change?
+   - **Commands.** Did `check_fast` and `check_full` succeed at the base commit (step 9)?
+   - **Branch.** When the work does not start from the remote default branch, or the repository instructions do not say where pull requests go, does `start_branch` say it?
+   - **Source.** Does the pin name the version you read? When the tracker only serves the current version, pin its last update time at planning.
 
-After all three passes succeed, delete repeated background.
+   When an answer needs a choice you cannot make alone, such as moving a criterion to a `[HUMAN]` task or building a test an agent can run for it, ask the user before creating the tickets. An answer that stays no is a blocking decision in the plan.
+
+After all four passes succeed, delete repeated background. `/jidota:check` asks the readiness questions again, with a fresh agent, when the tickets reach Review: a task that passes the readiness pass leaves it nothing to find.
 
 ## Return
 

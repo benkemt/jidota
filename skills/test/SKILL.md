@@ -25,15 +25,16 @@ Work from the cheapest check to the most expensive. When a cheap check fails, st
 2. **Map each criterion to its proof**: the existing or new test, the command, the browser flow, or the manual check that shows it. Cover changed behavior and the behavior a refactor must keep. Use the checks the ticket gives as they are written before looking for others.
 3. **Check that the existing tests were not weakened**: in the diff of the test files, look for deleted or loosened assertions, skipped or disabled tests, and expected values changed to match the new output. Each one is a failure of the criterion it covered, unless the ticket asks for it.
 4. **Add or update focused tests where proof is missing.** Follow the test layout of the repository. A test proves a criterion only if it fails when the behavior breaks. Assert what a user or caller can observe, unless the test targets a contract documented in the ticket or the spec. Keep the setup and the assertions no more complex than the scenario. Use the real values of the ticket's Examples. Do not change production code: when a test exposes a defect, the criterion is `Fail`.
-5. **Run `check_fast`**, or the narrowest command that exercises the changed behavior and the affected interfaces.
-6. **Run `check_full`** once, or wider checks when shared behavior or interfaces changed.
-7. **Run the manual checks** of How to check step by step and compare with the expected observation.
-8. **Check in a real browser** when browser-rendered behavior changed. Start the app as the repository instructions say, then run the required flows and their failure cases.
+5. **Show that each test of a `[new]` criterion fails without the change.** Use the red run recorded before the change, when the test has not changed since. Otherwise, run the test in a scratch worktree of the tested commit with the production change reverted, keeping only the empty shells the test needs to compile, and remove the worktree afterwards. The test must fail on its assertion. A test that passes without the change proves nothing: its criterion is `Fail`. A `[kept]` criterion needs no red run: its test passes before and after.
+6. **Run `check_fast`**, or the narrowest command that exercises the changed behavior and the affected interfaces.
+7. **Run `check_full`** once, or wider checks when shared behavior or interfaces changed.
+8. **Run the manual checks** of How to check step by step and compare with the expected observation.
+9. **Check in a real browser** when browser-rendered behavior changed. Start the app as the repository instructions say, then run the required flows and their failure cases.
    - Desktop and mobile when layout or responsive styles changed.
    - Keyboard use when interactions changed.
    - Console errors and failed requests during every flow.
    - Capture evidence: screenshot, recording, or log. Reading the source is not browser proof.
-9. **When automated checks cannot reach a behavior**, say why and give the other evidence used, or mark the criterion `Unverified`.
+10. **When automated checks cannot reach a behavior**, say why and give the other evidence used, or mark the criterion `Unverified`.
 
 When a check fails, find out whether the change caused it. If the plan recorded it as already failing at `base_commit`, it does not count against the change. Otherwise, run the same check on the merge-base in a separate worktree (`git worktree add <scratch dir> <merge-base>`) and remove the worktree afterwards. A failure that was already there and hides a criterion makes that criterion `Unverified`.
 
@@ -51,7 +52,7 @@ criteria: {pass: <n>, fail: <n>, unverified: <n>, not_run: <n>}
 
 Criterion: <ID or exact wording>
 Result: Pass | Fail | Unverified | Not run
-Evidence: <command and its result, browser flow, or artifact>
+Evidence: <command and its result, browser flow, or artifact; for a `[new]` criterion, also the failing run without the change>
 Gap: <for Fail: path:line or test name, observed → expected, with real values; for Unverified: what is missing; otherwise None>
 
 Tests added or changed: <path and test name, with the criterion each one proves; or None>

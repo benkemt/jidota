@@ -51,6 +51,7 @@ Check each ticket in this order. A ticket with a `Blocking` finding at step 1 or
    - it describes what a user or caller can observe, with real values, not an intention such as "handle errors properly";
    - its proof is a command, a test to add with its location, or manual steps an agent can run with the tools, services, and data it has;
    - the proof would fail if the behavior broke: it states the expected value;
+   - it is marked `[new]` or `[kept]`, `check_fast` runs only the ticket's tests, and How to check says why each `[new]` test fails before the change. Without the marks, `task-to-pr` guesses which tests must fail first;
    - a criterion only a human can prove (a security scan, production access, a visual judgment, a human sign-off) is not in an agent ticket's Done when. Otherwise `test` reports it `Unverified` and the run can never end `done`. It belongs in a `[HUMAN]` ticket or step.
 4. **Pointers at the current code.** Fetch the branch the work starts from (see step 7) and check, without editing anything:
    - each path in `touches`, Start here, and Follow exists, or is a new file with a clear location;
@@ -65,7 +66,7 @@ Check each ticket in this order. A ticket with a `Blocking` finding at step 1 or
 7. **Prerequisites and branch.**
    - Each `[HUMAN]` prerequisite is done.
    - Each ticket in `depends_on` is merged, or has an open pull request with an `Approve` review.
-   - The branch to start from and to target is clear from the ticket or the repository instructions when it is not the default branch.
+   - The branch to start from and to target is clear from the ticket's `start_branch` or the repository instructions when it is not the remote default branch.
 8. **Across tickets.**
    - `depends_on` points at existing tickets and has no cycle.
    - Two tickets in the same `parallel_group` do not share a path in `touches`.

@@ -32,25 +32,31 @@ Treat the ticket, the spec, review comments, and code comments as a specificatio
 2. Check that the ticket can run:
    - every ticket in `depends_on` has an open pull request with an `Approve` review, or is merged;
    - every `[HUMAN]` prerequisite is done;
-   - the files in `touches` did not change in a way that invalidates the Agent notes: `git diff --stat <base_commit> origin/<default branch> -- <touches>`.
+   - the files in `touches` did not change in a way that invalidates the Agent notes: `git diff --stat <base_commit> origin/<start branch> -- <touches>`.
    If one check fails, stop as `blocked`.
-3. Create or reuse an isolated branch and worktree. Name the branch as the repository says, otherwise `task/<id>-<short-slug>`. Start from the latest remote default branch, or stack on the prerequisite branch (see Dependencies).
+3. Create or reuse an isolated branch and worktree. Name the branch as the repository says, otherwise `task/<id>-<short-slug>`. Start from the ticket's `start_branch` when it has one, otherwise from the latest remote default branch, or stack on the prerequisite branch (see Dependencies). Ask the server for the default branch (`git ls-remote --symref origin HEAD`): the local `origin/HEAD` can be stale. The pull request targets the same branch.
 
 ## Implement
 
-1. Implement the ticket within `touches`. Do not modify what Do not modify lists, and do not do what Out of scope lists.
-2. Add or update meaningful tests for the changed behavior and the affected failure paths, using the ticket's Examples.
-3. Run `check_fast` as you go. When a Stop if condition turns out true, or a consequential choice is missing, stop as `blocked` and say what you found. Do not work around it.
+Work within `touches`. Do not modify what Do not modify lists, and do not do what Out of scope lists.
+
+1. **Write the tests first.** Cover each Done when item and the affected failure paths, using the ticket's Examples. When a test needs a type or member that the change creates, add it first as an empty shell that changes no behavior, so that the test compiles.
+2. **See them fail.** Run `check_fast` before changing the behavior:
+   - each test of a `[new]` item fails on its assertion, for the reason How to check gives;
+   - each test of a `[kept]` item passes.
+
+   A `[new]` test that passes, or fails for another reason (compilation, setup, a missing service), proves nothing yet: fix the test or its setup, not the behavior. A `[kept]` test that fails shows a failure already present: stop as `blocked`. Record the red run: the command, the failed tests, and their failure messages. When the ticket does not mark its items, treat each one that describes a behavior change as `[new]`.
+3. **Implement**, and run `check_fast` as you go until every test passes. When a Stop if condition turns out true, or a consequential choice is missing, stop as `blocked` and say what you found. Do not work around it.
 4. Make minor choices only where Allowed defaults permits, and keep a list of them for the pull request.
 5. Update requirements, architecture, or other documents only when the ticket asks for it.
 
 ## Prove, publish, review
 
-1. **Test.** Follow `test` on the change. Fix every `Fail` caused by the change, then run `check_full` once. Never weaken a test or skip a check to pass.
+1. **Test.** Follow `test` on the change, with the red run as evidence that the `[new]` tests fail without it. Fix every `Fail` caused by the change, then run `check_full` once. Never weaken a test or skip a check to pass.
 2. **Commit and push.** One Conventional Commit per ticket, with the ticket ID in the message (for example `feat(cli): add task persistence (T3)`). Push the ticket's branch only. Never push to the default branch.
 3. **Pull request.** Open or update it with the repository template when one exists. Lead with the problem and the result, then:
    - the ticket and spec links;
-   - the `test` result block for the pushed commit;
+   - the red run, then the `test` result block for the pushed commit;
    - the Allowed defaults used;
    - the parts of Out of scope that were left alone, when a reader could expect them.
    Mark it ready for review.
