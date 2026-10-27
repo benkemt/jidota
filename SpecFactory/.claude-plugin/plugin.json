@@ -1,0 +1,10 @@
+{
+  "name": "jidota",
+  "version": "0.1.0",
+  "description": "JidoTa spec factory: turn an Azure DevOps work item or a GitHub issue into a spec and child tickets published as GitHub issues.",
+  "author": {
+    "name": "Benjamin Moiroud"
+  },
+  "repository": "https://github.com/benkemt/jidota",
+  "license": "MIT"
+}
