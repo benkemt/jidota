@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code factory</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6eb; --text: #1d2330; --muted: #6b7383;
+    --accent: #3b5bdb; --pass: #2b8a3e; --pass-bg: #e6f4ea; --changes: #c92a2a; --changes-bg: #fdecec;
+    --pending: #868e96; --pending-bg: #f1f3f5; --warn: #b35c00; --warn-bg: #fff4e0;
+    --shadow: 0 1px 2px rgba(20, 30, 50, .06), 0 2px 8px rgba(20, 30, 50, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b1f27; --line: #2c323d; --text: #e4e7ec; --muted: #8c94a3;
+      --accent: #7c95ff; --pass: #63c27a; --pass-bg: #1d3325; --changes: #ff7b7b; --changes-bg: #3a1f22;
+      --pending: #9aa2ad; --pending-bg: #262b34; --warn: #f0a24a; --warn-bg: #2a2219;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 16px 20px 8px; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pass); margin-right: 6px; }
+  .dot.off { background: var(--changes); }
+  .specs { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 20px 12px; }
+  .spec-chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px;
+               padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .spec-chip b { font-weight: 600; color: var(--muted); margin-left: 6px; }
+  .spec-chip.on { border-color: var(--accent); color: var(--accent); }
+  .spec-chip.on b { color: var(--accent); }
+  .attention { margin: 0 20px 12px; padding: 10px; border-radius: 10px; background: var(--warn-bg);
+               display: flex; gap: 10px; flex-wrap: wrap; }
+  .attention > h2 { width: 100%; margin: 0 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn); }
+  .attention .card { width: 300px; }
+  .board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 24px; overflow-x: auto; }
+  .col { min-width: 0; }
+  .col h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 4px 2px 8px;
+            display: flex; justify-content: space-between; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+          box-shadow: var(--shadow); cursor: pointer; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .card .top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+  .card .tid { font-weight: 650; color: var(--text); }
+  .card .title { font-weight: 550; margin: 3px 0 6px; }
+  .card .spec { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .reason { margin-top: 6px; font-size: 12px; color: var(--warn); }
+  .card.needs-human .reason, .card.blocked .reason { font-weight: 550; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--pending-bg); color: var(--muted); }
+  .badge.needs-human { background: var(--changes-bg); color: var(--changes); }
+  .badge.blocked { background: var(--warn-bg); color: var(--warn); }
+  .badge.done { background: var(--pass-bg); color: var(--pass); }
+  .rounds { margin-top: 6px; display: grid; gap: 3px; }
+  .round { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .round .n { font-size: 11px; color: var(--muted); width: 22px; }
+  .chip { font-size: 11px; padding: 1px 6px; border-radius: 5px; background: var(--pending-bg); color: var(--pending); }
+  .chip.PASS { background: var(--pass-bg); color: var(--pass); }
+  .chip.CHANGES, .chip.INVALID { background: var(--changes-bg); color: var(--changes); }
+  .empty { color: var(--muted); font-size: 12px; padding: 8px 2px; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--panel);
+            border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.12); display: none; flex-direction: column; }
+  .drawer.open { display: flex; }
+  .drawer header { border-bottom: 1px solid var(--line); padding: 14px 16px; justify-content: space-between; align-items: center; }
+  .drawer header button { border: 0; background: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  .tabs button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 6px;
+                 padding: 3px 8px; font: inherit; font-size: 12px; cursor: pointer; }
+  .tabs button.on { border-color: var(--accent); color: var(--accent); }
+  .doc { padding: 4px 20px 32px; overflow: auto; }
+  .doc h1, .doc h2, .doc h3, .doc h4 { margin: 18px 0 8px; line-height: 1.25; }
+  .doc h1 { font-size: 20px; } .doc h2 { font-size: 16px; } .doc h3 { font-size: 14px; } .doc h4 { font-size: 13px; }
+  .doc table { border-collapse: collapse; margin: 8px 0; font-size: 13px; display: block; overflow-x: auto; }
+  .doc th, .doc td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+  .doc th { background: var(--bg); }
+  .doc pre { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; overflow-x: auto; font-size: 12px; }
+  .doc code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .doc :not(pre) > code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+  .doc blockquote { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+  .doc a { color: var(--accent); }
+  @media (max-width: 700px) { .board { grid-template-columns: repeat(5, 260px); } .attention .card { width: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Code factory</h1>
+  <span class="meta"><span id="dot" class="dot"></span><span id="status">loading board.json…</span></span>
+</header>
+<nav class="specs" id="specs"></nav>
+<section class="attention" id="attention" hidden></section>
+<main class="board" id="board"></main>
+<aside class="drawer" id="drawer">
+  <header><div><div id="d-title" style="font-weight:650"></div><div id="d-sub" class="meta"></div></div>
+    <button id="d-close" title="Close">×</button></header>
+  <div class="tabs" id="d-tabs"></div>
+  <div class="doc" id="d-doc"></div>
+</aside>
+<script>
+const COLUMNS = ["spec", "build", "review", "approve", "done"];
+const ATTENTION = ["needs-human", "blocked"];
+let board = { jobs: [] }, lastText = "", openJob = null, openFile = null;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const selectedSpec = () => decodeURIComponent(location.hash.replace(/^#spec=/, "")) || null;
+
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  return s < 60 ? `${Math.round(s)}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : new Date(iso).toLocaleDateString();
+}
+
+function specs() {
+  const map = new Map();
+  for (const j of board.jobs) {
+    const s = map.get(j.spec) || { ref: j.spec, title: j.spec_title || j.spec, done: 0, total: 0 };
+    s.total++; if (j.stage === "done") s.done++;
+    map.set(j.spec, s);
+  }
+  return [...map.values()];
+}
+
+function renderSpecs() {
+  const nav = document.getElementById("specs"), current = selectedSpec(), all = specs();
+  nav.innerHTML = "";
+  const done = board.jobs.filter(j => j.stage === "done").length;
+  const chip = (label, count, ref) => {
+    const b = el("button", "spec-chip" + ((ref || null) === current ? " on" : ""), `${esc(label)}<b>${count}</b>`);
+    b.title = ref || "All specs";
+    b.onclick = () => { location.hash = ref ? "spec=" + encodeURIComponent(ref) : ""; render(); };
+    nav.append(b);
+  };
+  chip("All", `${done}/${board.jobs.length}`, null);
+  for (const s of all) chip(s.title, `${s.done}/${s.total}`, s.ref);
+}
+
+function card(j) {
+  const c = el("div", "card " + j.stage);
+  const key = j.key ? ` · ${esc(j.key)}` : "";
+  const badge = ["done", ...ATTENTION].includes(j.stage) || !COLUMNS.includes(j.stage) ? `<span class="badge ${esc(j.stage)}">${esc(j.stage)}</span>` : `<span>R${j.round || 0}</span>`;
+  c.innerHTML = `<div class="top"><span><span class="tid">${esc(j.ticket_id)}</span>${key}</span>${badge}</div>
+    <div class="title">${esc(j.title)}</div>
+    <div class="spec" title="${esc(j.spec)}">${esc(j.spec_title || j.spec)}</div>`;
+  if ((j.rounds || []).length) {
+    const rs = el("div", "rounds");
+    j.rounds.forEach((r, i) => {
+      const row = el("div", "round", `<span class="n">R${i + 1}</span>`);
+      for (const [name, v] of Object.entries(r || {})) row.append(el("span", "chip " + esc(v), `${esc(name)} ${v === "pending" ? "…" : esc(v)}`));
+      rs.append(row);
+    });
+    c.append(rs);
+  }
+  if (j.reason) c.append(el("div", "reason", esc(j.reason)));
+  c.append(el("div", "spec", `${esc(j.id)} · ${esc(ago(j.updated))}`));
+  c.onclick = () => openDrawer(j.id);
+  return c;
+}
+
+function render() {
+  renderSpecs();
+  const current = selectedSpec();
+  const jobs = board.jobs.filter(j => !current || j.spec === current);
+  const att = document.getElementById("attention");
+  const stuck = jobs.filter(j => ATTENTION.includes(j.stage));
+  att.hidden = !stuck.length;
+  att.innerHTML = "<h2>Needs a human</h2>";
+  stuck.forEach(j => att.append(card(j)));
+  const main = document.getElementById("board");
+  main.innerHTML = "";
+  for (const col of COLUMNS) {
+    const here = jobs.filter(j => j.stage === col);
+    const c = el("section", "col", `<h2><span>${col}</span><span>${here.length}</span></h2>`);
+    here.forEach(j => c.append(card(j)));
+    if (!here.length) c.append(el("div", "empty", "—"));
+    main.append(c);
+  }
+  if (openJob) renderDrawer(false);
+}
+
+async function poll() {
+  try {
+    const r = await fetch("board.json", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const text = await r.text();
+    document.getElementById("dot").className = "dot";
+    if (text !== lastText) { lastText = text; board = JSON.parse(text); board.jobs ||= []; render(); }
+    document.getElementById("status").textContent = `${board.jobs.length} jobs · polled ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    document.getElementById("dot").className = "dot off";
+    document.getElementById("status").textContent = "board.json unreachable — serve factory/ with python -m http.server";
+  }
+}
+
+// --- drawer: the job's markdown files ---------------------------------------
+function openDrawer(id) { openJob = id; openFile = null; renderDrawer(true); }
+
+function renderDrawer(reload) {
+  const j = board.jobs.find(x => x.id === openJob);
+  const d = document.getElementById("drawer");
+  if (!j) { d.classList.remove("open"); return; }
+  d.classList.add("open");
+  document.getElementById("d-title").textContent = `${j.ticket_id} — ${j.title}`;
+  document.getElementById("d-sub").textContent = `${j.id} · ${j.stage}${j.reason ? " · " + j.reason : ""} · ${j.branch} → ${j.start_branch}`;
+  const files = j.files || [];
+  if (!openFile || !files.includes(openFile)) { openFile = files[files.length - 1] || null; reload = true; }
+  const tabs = document.getElementById("d-tabs");
+  tabs.innerHTML = "";
+  for (const f of files) {
+    const b = el("button", f === openFile ? "on" : "", esc(f));
+    b.onclick = () => { openFile = f; renderDrawer(true); };
+    tabs.append(b);
+  }
+  if (reload) loadFile(j.id, openFile);
+}
+
+async function loadFile(id, f) {
+  const doc = document.getElementById("d-doc");
+  if (!f) { doc.innerHTML = "<p class='empty'>No file yet.</p>"; return; }
+  try {
+    const r = await fetch(`jobs/${encodeURIComponent(id)}/${f.split("/").map(encodeURIComponent).join("/")}`, { cache: "no-store" });
+    doc.innerHTML = r.ok ? markdown(await r.text()) : `<p class='empty'>${esc(f)}: HTTP ${r.status}</p>`;
+  } catch (e) { doc.innerHTML = `<p class='empty'>${esc(f)}: ${esc(e.message)}</p>`; }
+}
+
+document.getElementById("d-close").onclick = () => { openJob = null; document.getElementById("drawer").classList.remove("open"); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("d-close").click(); });
+window.addEventListener("hashchange", render);
+
+// --- tiny markdown renderer: headings, lists, tables, code, quotes ----------
+function inline(s) {
+  const codes = [];
+  s = esc(s).replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+       .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+       .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
+}
+
+function markdown(src) {
+  const lines = src.replace(/\r/g, "").split("\n"), out = [];
+  const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    let m;
+    if ((m = l.match(/^(\s*)(`{3,}|~{3,})(.*)$/))) {
+      const fence = m[2], body = [];
+      i++;
+      while (i < lines.length && !(lines[i].trim().startsWith(fence[0].repeat(fence.length)) && lines[i].trim().replace(/[`~]/g, "") === "")) body.push(lines[i++]);
+      i++;
+      out.push(`<pre><code>${esc(body.join("\n"))}</code></pre>`);
+    } else if ((m = l.match(/^(#{1,6})\s+(.*)$/))) {
+      out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); i++;
+    } else if (/^\s*\|/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      const head = cells(l); i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(cells(lines[i++]));
+      out.push(`<table><thead><tr>${head.map(c => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>` +
+        rows.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("") + "</tbody></table>");
+    } else if (/^\s*([-*]|\d+\.)\s+/.test(l)) {
+      const ordered = /^\s*\d+\./.test(l), items = [];
+      while (i < lines.length && (/^\s*([-*]|\d+\.)\s+/.test(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && items.length))) {
+        const item = lines[i].match(/^(\s*)(?:[-*]|\d+\.)\s+(.*)$/);
+        if (item) items.push({ depth: Math.floor(item[1].length / 2), text: item[2] });
+        else items[items.length - 1].text += " " + lines[i].trim();
+        i++;
+      }
+      const tag = ordered ? "ol" : "ul";
+      out.push(`<${tag}>` + items.map(it => `<li style="margin-left:${it.depth * 18}px">${inline(it.text.replace(/^\[( |x)\]\s*/i, (_, x) => x.trim() ? "☑ " : "☐ "))}</li>`).join("") + `</${tag}>`);
+    } else if (/^\s*>/.test(l)) {
+      const q = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) q.push(lines[i++].replace(/^\s*>\s?/, ""));
+      out.push(`<blockquote>${inline(q.join(" "))}</blockquote>`);
+    } else if (!l.trim()) {
+      i++;
+    } else {
+      const p = [];
+      while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*\||\s*([-*]|\d+\.)\s|\s*>|\s*(`{3,}|~{3,}))/.test(lines[i])) p.push(lines[i++]);
+      if (!p.length) p.push(lines[i++]);
+      out.push(`<p>${inline(p.join(" "))}</p>`);
+    }
+  }
+  return out.join("\n");
+}
+
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>
