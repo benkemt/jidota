@@ -1,7 +1,7 @@
 ---
 name: code-factory
-description: Turn one ticket (GitHub issue or local specs/<slug>/tickets/T<n>.md) into tested, reviewed, squash-merged code on its start branch — builder, parallel reviewers, approver — with a live board in factory/. A spec given instead is queued ticket by ticket in factory/backlog.md. Never pushes.
-argument-hint: <ticket | spec | next | approve <job-id> | rework <job-id> <note>>
+description: Turn one ticket (GitHub issue or local specs/<slug>/tickets/T<n>.md) into tested, reviewed code — builder, parallel reviewers, approver — squash-merged into its start branch or proposed as a draft PR (GitHub or Azure DevOps), with a live board in factory/. A spec given instead is queued ticket by ticket in factory/backlog.md. Never pushes anything but the job branch of a draft PR.
+argument-hint: <ticket | spec | next> [--pr | --merge] | approve <job-id> | rework <job-id> <note>
 disable-model-invocation: true
 ---
 
@@ -19,10 +19,11 @@ Every `F` command prints JSON. Exit codes: 0 ok, 1 error, 2 [HUMAN] ticket, 3 op
 
 ## The loop (edit this to change the factory)
 
-Reviewers: security, code.  Max rework rounds: 2.
+Reviewers: security, code.  Max rework rounds: 2.  Delivery: merge.
 
 - Reviewer `<name>` is the agent `jidota:<name>-reviewer` and writes `round-<n>/review-<name>.md`. Pass the list to `F new … --reviewers security,code`.
 - Pass the maximum to `F round … --max-rework 2`.
+- Delivery is `merge` (squash-merge into the start branch, local, nothing pushed) or `draft-pr` (push the job branch, open a draft PR into the start branch). `--pr` in the arguments means `draft-pr`, `--merge` means `merge`; without either, use the Delivery above. Pass it to `F new … --delivery <delivery>`. The job keeps it on the board (`delivery`); every later step reads it from there.
 
 ```
 ticket ─▶ F new ─▶ builder ─┬─ BLOCKED ─▶ blocked ◀── rework
@@ -30,8 +31,9 @@ ticket ─▶ F new ─▶ builder ─┬─ BLOCKED ─▶ blocked ◀── re
                                          ▲                                         │
                                          └──── any CHANGES: resume builder ◀───────┤ (max 2, then needs-human)
                                                                                    ▼ all PASS
-                                                    approver ─┬─ APPROVE ─▶ F merge ─▶ done
-                                                              └─ ESCALATE ─▶ needs-human ◀── approve | rework
+                                    approver ─┬─ APPROVE ─▶ merge: F merge ─▶ done
+                                              │             draft-pr: F pr ─▶ pr ─▶ (human merges the PR) ─▶ done
+                                              └─ ESCALATE ─▶ needs-human (draft-pr: F pr --escalated) ◀── approve | rework
 ```
 
 Rules for the whole run:
@@ -41,28 +43,28 @@ Rules for the whole run:
 - Run `F set` / `F round` after every event, so the dashboard is always current.
 - Read only the first line of an agent's file to route: `build.md` starts with `STATUS: DONE` or `STATUS: BLOCKED`, a review with `VERDICT: PASS` or `VERDICT: CHANGES`, `decision.md` with `APPROVE` or `ESCALATE`. A malformed first line or a missing file: send the agent back once with the problem; the second time, `F set <job> --stage needs-human --reason "<agent>: malformed <file>"` and stop.
 - Agents run in the background: wait for each agent's completion notification before reading its file.
-- Nothing is ever pushed. Pushing, and opening a PR, stay human.
+- The only push is the job branch `factory/<job-id>`, by `F pr`, in draft-pr delivery. Never push the start branch, never force-push, never run `git push` yourself. The PR is always a draft: marking it ready, approving and completing it stay human.
 
 ## 0. Start
 
-Run `F init` (idempotent: creates `factory/`, copies the dashboard, excludes `factory/` from git). Then read the first word of the arguments:
+Run `F init` (idempotent: creates `factory/`, copies the dashboard, excludes `factory/` from git). Take `--pr` or `--merge` out of the arguments to set the delivery (see the loop), then read the first word:
 
 | Arguments | Go to |
 |---|---|
-| none | Show the board summary from the `init` output (one line per job: id, stage, round, reason), the backlog counts, the accepted forms below, and how to open the dashboard: `cd factory; python -m http.server 8765`, then http://localhost:8765/dashboard.html. Offer to start the server in the background. Stop. |
+| none | Show the board summary from the `init` output (one line per job: id, stage, round, reason, PR URL if any), the backlog counts, the accepted forms below, and how to open the dashboard: `cd factory; python -m http.server 8765`, then http://localhost:8765/dashboard.html. Offer to start the server in the background. Stop. |
 | `approve <job-id>` | step 6 |
 | `rework <job-id> <note>` | step 7 |
-| `next` | step 1 with `F new next --reviewers security,code` |
-| anything else (ticket or spec) | step 1 with `F new <argument> --reviewers security,code` |
+| `next` | step 1 with `F new next --reviewers security,code --delivery <delivery>` |
+| anything else (ticket or spec) | step 1 with `F new <argument> --reviewers security,code --delivery <delivery>` |
 
-Accepted forms: a GitHub issue URL or `owner/repo#n` (ticket or spec), `specs/<slug>/tickets/T<n>.md`, `specs/<slug>/spec.md` or `specs/<slug>`, `next`, `approve <job-id>`, `rework <job-id> <note>`.
+Accepted forms: a GitHub issue URL or `owner/repo#n` (ticket or spec), `specs/<slug>/tickets/T<n>.md`, `specs/<slug>/spec.md` or `specs/<slug>`, `next`, each optionally followed by `--pr` or `--merge`; `approve <job-id>`, `rework <job-id> <note>`.
 
 ## 1. Create the job
 
 Check the tree is clean, then run the `F new` command.
 
-- Exit 0 with `"kind": "spec"`: the spec was not built, its tickets were queued. Show the spec title, the lines added to `factory/backlog.md` in order (`[HUMAN]` ones included) and the skipped ones with their reason. Then run step 1 once more with `F new next --reviewers security,code`.
-- Exit 0 with `"kind": "job"`: the job is created at stage `spec`, its folder is `factory/jobs/<id>/`. Tell the user the job id, the ticket, its spec, the branch and the commit subject. Go to step 2.
+- Exit 0 with `"kind": "spec"`: the spec was not built, its tickets were queued. Show the spec title, the lines added to `factory/backlog.md` in order (`[HUMAN]` ones included) and the skipped ones with their reason. Then run step 1 once more with `F new next --reviewers security,code --delivery <delivery>`.
+- Exit 0 with `"kind": "job"`: the job is created at stage `spec`, its folder is `factory/jobs/<id>/`. Tell the user the job id, the ticket, its spec, the branch, the commit subject and the delivery. Go to step 2.
 - Exit 2: a `[HUMAN]` ticket. Say a person must do it, and check its backlog line (or close its issue) once done. Stop.
 - Exit 3: the ticket already has an open job: show it (id, stage, reason) and the commands that can move it (`rework`, `approve`). Stop.
 - Exit 4: show each dependency not done and why (`missing`), or for `next` each unchecked backlog line and what it waits for (`waiting`). Stop.
@@ -113,19 +115,22 @@ Check the tree is clean, then run the `F new` command.
 
    > Job folder: factory/jobs/<job-id>/
 
-3. Read the first line of `decision.md`:
-   - `APPROVE`: run `F merge <job>`. Exit 0: report the commit on the start branch and remind the user that nothing was pushed. Exit 1 with `"stage": "needs-human"`: the merge failed (conflict, or no change against the start branch), the script reset the merge and set the stage with the reason: show it and stop. Exit 1 without it (dirty tree, missing branch): show the error and stop; the stage is unchanged.
-   - `ESCALATE`: `F set <job> --stage needs-human --reason "<first reason of decision.md>"`. Show the reasons and the commands of steps 6 and 7. Stop.
+3. Read the first line of `decision.md`, then deliver by the job's `delivery` on the board:
+   - `APPROVE`, delivery `merge`: run `F merge <job>`. Exit 0: report the commit on the start branch and remind the user that nothing was pushed.
+   - `APPROVE`, delivery `draft-pr`: run `F pr <job>`. Exit 0: the job branch is pushed and the draft PR is open (or updated, after a rework), stage `pr`. Report the PR URL. Tickets that depend on this one wait until a human merges the PR.
+   - `ESCALATE`: `F set <job> --stage needs-human --reason "<first reason of decision.md>"`, then for delivery `draft-pr` run `F pr <job> --escalated`: the draft PR opens with the escalation reasons on top and the stage stays `needs-human`. Show the reasons, the PR URL if any, and the commands of steps 6 and 7. Stop.
+
+   `F merge` or `F pr` exit 1 with `"stage": "needs-human"` in the output: the merge conflicted or had no change, or the push or the PR call failed; the script set the stage with the reason. Show it and stop. Exit 1 without it (dirty tree, missing branch, origin neither GitHub nor Azure DevOps): show the error and stop; the stage is unchanged.
 
 ## 6. `approve <job-id>`
 
-A human accepts a `needs-human` job as it is. Check on the board that its stage is `needs-human` (otherwise say so and stop) and that the tree is clean, then run `F merge <job>` and report as in step 5.
+A human accepts a `needs-human` job as it is. Check on the board that its stage is `needs-human` (otherwise say so and stop) and that the tree is clean, then deliver by the job's `delivery`: `F merge <job>`, or `F pr <job>` (pushes the branch, opens or updates the draft PR, stage `pr`). Report as in step 5.
 
 ## 7. `rework <job-id> <note>`
 
-A human sends a `needs-human` or `blocked` job back to the builder.
+A human sends a `needs-human`, `blocked` or `pr` job back to the builder (`pr`: changes asked after reading the draft PR).
 
-1. Check the stage (`needs-human` or `blocked`, otherwise say so and stop) and that the tree is clean.
+1. Check the stage (`needs-human`, `blocked` or `pr`, otherwise say so and stop) and that the tree is clean.
 2. `n` is the job's `round` plus 1. Write `factory/jobs/<job-id>/round-<n>/review-human.md`, the only file of that round:
 
    ```markdown
@@ -137,8 +142,8 @@ A human sends a `needs-human` or `blocked` job back to the builder.
    ```
 
 3. `F round <job> <n>`: it expects only `human` and resets the rework count.
-4. Go to step 4 with this round folder (a builder that was BLOCKED restarts at pass 0 with the note as its answer), then step 3 runs a full review round `n + 1`.
+4. Go to step 4 with this round folder (a builder that was BLOCKED restarts at pass 0 with the note as its answer), then step 3 runs a full review round `n + 1`. In draft-pr delivery, a PR already open gets the new commits and description at the next `F pr`.
 
 ## 8. Report
 
-At every stop, give: the job id and stage, the branch, the commit subject, the last round's verdicts, the files to read in `factory/jobs/<job-id>/`, and the dashboard URL. Run one job per invocation: to continue a backlog, the user runs `/jidota:code-factory next` again.
+At every stop, give: the job id and stage, the delivery, the branch, the commit subject, the PR URL if any, the last round's verdicts, the files to read in `factory/jobs/<job-id>/`, and the dashboard URL. Run one job per invocation: to continue a backlog, the user runs `/jidota:code-factory next` again. A job at stage `pr` turns `done` when a later dependency check finds its PR merged.

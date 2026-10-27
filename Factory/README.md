@@ -104,14 +104,15 @@ scheduler input.
 ## Factory
 
 The code factory takes **one ticket** and turns it into tested, reviewed code, squash-merged into the
-ticket's `start_branch`. A spec is never built as such: given a spec, the factory queues its tickets.
+ticket's `start_branch` or proposed as a draft pull request. A spec is never built as such: given a
+spec, the factory queues its tickets.
 A job is always one ticket, and every job knows its spec.
 
 Run it from the root of the code repository, with the same plugin loaded:
 
 ```
 /jidota:code-factory specs/ado-886/tickets/T1.md
-/jidota:code-factory https://github.com/benkemt/specs/issues/36
+/jidota:code-factory https://github.com/benkemt/specs/issues/36 --pr
 ```
 
 The session that runs it becomes the orchestrator: it spawns every agent and is the only writer of
@@ -119,7 +120,7 @@ The session that runs it becomes the orchestrator: it spawns every agent and is 
 
 ### The loop
 
-Reviewers: security, code. Max rework rounds: 2. Both are set at the top of
+Reviewers: security, code. Max rework rounds: 2. Delivery: merge. All three are set at the top of
 [`skills/code-factory/SKILL.md`](skills/code-factory/SKILL.md).
 
 | Step | Who | Output in `factory/jobs/<id>/` | Next |
@@ -127,13 +128,30 @@ Reviewers: security, code. Max rework rounds: 2. Both are set at the top of
 | 1. Ticket → job, dependency check | `factory.py new` | `spec.md` (job table, dependencies, raw ticket and spec) | build |
 | 2. Implement in passes with proof, commit on `factory/<id>` | `jidota:builder` (opus) | `build.md` | `STATUS: DONE` → review, `BLOCKED` → blocked |
 | 3. Review the diff, all reviewers at once | `jidota:security-reviewer`, `jidota:code-reviewer` (opus) | `round-<n>/review-<name>.md` | wait for all; any `CHANGES` → builder again (2 rounds max, then needs-human); all `PASS` → approve |
-| 4. Decide | `jidota:approver` (opus) | `decision.md` | `APPROVE` → merge, `ESCALATE` → needs-human |
-| 5. Squash-merge into `start_branch` with the job's commit subject | `factory.py merge` | | done, or needs-human on conflict |
+| 4. Decide | `jidota:approver` (opus) | `decision.md` | `APPROVE` → deliver, `ESCALATE` → needs-human |
+| 5a. Delivery `merge`: squash-merge into `start_branch` with the job's commit subject | `factory.py merge` | | done, or needs-human on conflict |
+| 5b. Delivery `draft-pr`: push the job branch, open a draft PR into `start_branch` | `factory.py pr` | | pr; done once a human merges the PR |
 
-Every factory commit of a ticket, and the squash-merge commit, use one subject:
+Every factory commit of a ticket, the squash-merge commit and the PR title use one subject:
 `T<n> - <ticket title> (<key>)`, or `(<slug>)` for a local ticket that is not published yet. The
 dependency checks match that exact subject in `git log --format=%s <start_branch>`, so `#33` never
 matches `#330`, and the T1 of two specs never collide.
+
+### Delivery: merge or draft PR
+
+| | `merge` (default) | `draft-pr` (`--pr`) |
+|---|---|---|
+| After APPROVE | squash-merge into the local `start_branch`, stage done | push `factory/<job-id>` to `origin`, open a draft PR into `start_branch`, stage pr |
+| After ESCALATE | needs-human, nothing pushed | needs-human, and the draft PR is opened too, escalation reasons on top |
+| What is pushed | nothing | the job branch only: never `start_branch`, never a force push |
+| A dependent ticket starts when | the squash commit is on `start_branch` | the host reports the PR merged (the job then turns done) |
+
+The host comes from `git remote get-url origin`: GitHub (`gh pr create --draft`) or Azure DevOps
+Repos (`az repos pr create --draft true`); any other host is an error. The PR description is built
+from the job files: ticket and spec, the Proof table and test counts, the review verdicts, and the
+decision. A rework after the PR is open adds commits to the same branch and updates the same PR.
+Marking the PR ready, approving and completing it stay human. Set the default in the Delivery line
+of the SKILL.md; `--pr` or `--merge` after a ticket, a spec or `next` overrides it for that job.
 
 ### Commands
 
@@ -142,12 +160,15 @@ matches `#330`, and the T1 of two specs never collide.
 | `/jidota:code-factory <ticket>` | Run a ticket (GitHub issue URL, `owner/repo#n`, or `specs/<slug>/tickets/T<n>.md`) through the loop. Exit 4 shows the dependencies not done yet and stops. |
 | `/jidota:code-factory <spec>` | Queue the spec's tickets (`specs/<slug>/spec.md`, or a spec issue) in `backlog.md` in wave order, `[HUMAN]` ones as `[HUMAN]` lines, show the queue, then run `next` once. |
 | `/jidota:code-factory next` | Run the first unchecked agent ticket of `backlog.md` whose dependencies are done, and check its line with the job id. When none is ready, show what each line waits for. |
-| `/jidota:code-factory approve <job-id>` | Merge a needs-human job into its start branch as it is. |
-| `/jidota:code-factory rework <job-id> <note>` | Write the note to a new `round-<n>/review-human.md` (`VERDICT: CHANGES`), resume the builder on it, then run a full review round. Resets the rework count. |
+| `/jidota:code-factory approve <job-id>` | Accept a needs-human job as it is: merge it into its start branch, or, in draft-pr delivery, push it and open (or update) its draft PR. |
+| `/jidota:code-factory rework <job-id> <note>` | For a needs-human, blocked or pr job: write the note to a new `round-<n>/review-human.md` (`VERDICT: CHANGES`), resume the builder on it, then run a full review round. Resets the rework count. |
+
+`--pr` or `--merge` after a ticket, a spec or `next` sets the delivery of the job it creates.
 | `/jidota:code-factory` | Create `factory/` if needed, show the board summary and the accepted forms. |
 
 A dependency is done when a job of that ticket is `done` on the board, or its commit subject is on
-`start_branch` (merged by hand). A `[HUMAN]` dependency is done when its issue is closed, or, for a
+`start_branch` (merged by hand), or its job is at stage pr and the host reports the PR merged (a
+host rewrites the squash message of a PR, so the subject alone cannot find it). A `[HUMAN]` dependency is done when its issue is closed, or, for a
 local ticket, when its `backlog.md` line is checked: the person who does it checks the line.
 
 ### Dashboard
@@ -158,16 +179,17 @@ python -m http.server 8765
 ```
 
 Then open http://localhost:8765/dashboard.html. It polls `board.json` every 2 s: jobs are cards
-moving across spec · build · review · approve · done, needs-human and blocked jobs stand out with
-their reason, each review round is a row of reviewer chips, and a row of spec chips filters the board
-to one spec (kept in the URL hash). Click a card to read its markdown files.
+moving across spec · build · review · approve · pr · done, needs-human and blocked jobs stand out
+with their reason, each review round is a row of reviewer chips, a card with a draft PR links to it,
+and a row of spec chips filters the board to one spec (kept in the URL hash). Click a card to read
+its markdown files.
 
 ### Files
 
 | Path | Role |
 |---|---|
 | [`skills/code-factory/SKILL.md`](skills/code-factory/SKILL.md) | Orchestrator instructions, with the loop settings |
-| [`skills/code-factory/scripts/factory.py`](skills/code-factory/scripts/factory.py) | Board, backlog, job folders, rounds, merge. Stdlib only, JSON on stdout. Exit codes: 0 ok, 1 error, 2 [HUMAN] ticket, 3 open job, 4 dependency not done |
+| [`skills/code-factory/scripts/factory.py`](skills/code-factory/scripts/factory.py) | Board, backlog, job folders, rounds, merge, draft PR. Stdlib only, JSON on stdout. Exit codes: 0 ok, 1 error, 2 [HUMAN] ticket, 3 open job, 4 dependency not done |
 | [`skills/code-factory/dashboard.html`](skills/code-factory/dashboard.html) | Self-contained board, copied into `factory/` by `factory.py init` |
 | [`agents/builder.md`](agents/builder.md) | Passes 0–5: frame, baseline, red tests, implementation, counter-checks, commit and report |
 | [`agents/security-reviewer.md`](agents/security-reviewer.md) | Injection, secrets, authz, unsafe input, risky dependencies, in the diff only |
@@ -191,11 +213,14 @@ factory/
   works in the main working tree, on `factory/<job-id>`.
 - The build and test commands of the repository, as the tickets' How to check use them.
 - For GitHub tickets and specs: `gh` authenticated with read access to the spec repository.
+- For draft-pr delivery: push rights on `origin`, and `gh` (GitHub) or `az` with the `azure-devops`
+  extension (Azure DevOps Repos), logged in with the right to create pull requests.
 - Python 3.9+ (stdlib only).
 
 ### What it does not do yet
 
-- Push, open a PR, or comment on the ticket: merging stays local to `start_branch`, pushing stays human.
+- Push `start_branch`, mark a PR ready, approve or complete it, or comment on the ticket: those stay human.
+- Link the PR to the ticket or to an Azure DevOps work item.
 - Run several jobs at once: one job at a time, in the main working tree (no worktrees).
 - Run a whole backlog in one call: `next` runs one ticket per invocation.
 - Close the GitHub issue of a merged ticket, or read `[HUMAN]` status from anything but the issue

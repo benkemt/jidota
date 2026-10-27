@@ -9,14 +9,18 @@ A spec is a local specs/<slug>/spec.md or a GitHub issue whose first yaml block 
 child_specs and no id. A job is always one ticket; a spec is never built, its tickets are
 queued in factory/backlog.md.
 
+A job is delivered by `merge` (squash-merge into start_branch, nothing pushed) or by `pr`
+(push the job branch only, open a draft PR on GitHub or Azure DevOps, found from origin).
+
 Usage:
     python factory.py init
-    python factory.py new <ticket> [--reviewers security,code]
+    python factory.py new <ticket> [--reviewers security,code] [--delivery merge|draft-pr]
     python factory.py new <spec>
-    python factory.py new next [--reviewers security,code]
+    python factory.py new next [--reviewers security,code] [--delivery merge|draft-pr]
     python factory.py round <job> <n> [--max-rework 2]
     python factory.py set <job> --stage build [--reason "..."] [--builder <agent id>]
     python factory.py merge <job>
+    python factory.py pr <job> [--escalated] [--dry-run]
 
 Exit codes: 0 ok, 1 error, 2 [HUMAN] ticket, 3 open job, 4 dependency not done.
 """
@@ -29,6 +33,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.parse
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from graphlib import CycleError, TopologicalSorter
@@ -40,8 +46,10 @@ BACKLOG = FACTORY / "backlog.md"
 JOBS = FACTORY / "jobs"
 DASHBOARD = Path(__file__).resolve().parent.parent / "dashboard.html"
 
-STAGES = ["spec", "build", "review", "approve", "done", "needs-human", "blocked"]
+STAGES = ["spec", "build", "review", "approve", "pr", "done", "needs-human", "blocked"]
 DEFAULT_REVIEWERS = "security,code"
+DELIVERIES = ["merge", "draft-pr"]
+ADO_DESCRIPTION_MAX = 4000
 
 YAML_BLOCK = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
 H1 = re.compile(r"^#\s+(.+)$", re.MULTILINE)
@@ -49,6 +57,11 @@ TICKET_PREFIX = re.compile(r"^T\d+\s*[—–-]\s*")
 SPEC_PREFIX = re.compile(r"^Spec\s.*?\s—\s")
 GH_URL = re.compile(r"^https://github\.com/([^/\s]+)/([^/\s]+)/issues/(\d+)", re.IGNORECASE)
 GH_SHORT = re.compile(r"^([^/\s#]+)/([^/\s#]+)#(\d+)$")
+ORIGIN_GH = re.compile(r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?/?$", re.IGNORECASE)
+ORIGIN_ADO = re.compile(r"dev\.azure\.com/([^/]+)/([^/]+)/_git/([^/]+?)/?$", re.IGNORECASE)
+ORIGIN_ADO_SSH = re.compile(r"ssh\.dev\.azure\.com:v3/([^/]+)/([^/]+)/([^/]+?)/?$", re.IGNORECASE)
+ORIGIN_VS = re.compile(r"([^/.@]+)\.visualstudio\.com/(?:DefaultCollection/)?([^/]+)/_git/([^/]+?)/?$", re.IGNORECASE)
+MD_SECTION = re.compile(r"^## (.+)$", re.MULTILINE)
 BACKLOG_LINE = re.compile(r"^- \[([ xX])\] (\S+)(.*)$")
 VERDICT = re.compile(r"^VERDICT:\s*(PASS|CHANGES)\s*$")
 HUMAN_TAG = "[HUMAN]"
@@ -408,6 +421,18 @@ def dependency_done(dep: Ticket, branch: str, board: dict, backlog: Backlog, sub
         return True, f"job {done['id']} done"
     if dep.subject in subjects:
         return True, f"commit '{dep.subject}' on {branch}"
+    # A host rewrites the squash message of a completed PR: ask the host instead.
+    for job in (j for j in jobs if j["stage"] == "pr" and j.get("pr")):
+        try:
+            state = Host.from_origin().state(job["pr"]["number"])
+        except FactoryError as e:
+            return False, f"job {job['id']}: PR state unknown ({e})"
+        if state == "MERGED":
+            job["stage"], job["reason"] = "done", None
+            touch(job)
+            save_board(board)
+            return True, f"job {job['id']}: PR {job['pr']['url']} merged"
+        return False, f"job {job['id']}: PR {job['pr']['url']} {'open' if state == 'OPEN' else 'closed without merge'}"
     if jobs:
         return False, f"job {jobs[-1]['id']} at stage {jobs[-1]['stage']}"
     return False, f"no job, no commit '{dep.subject}' on {branch}"
@@ -448,7 +473,8 @@ def init() -> dict:
     return {
         "factory": FACTORY.resolve().as_posix(),
         "created": created,
-        "jobs": [{k: j.get(k) for k in ("id", "stage", "round", "reason", "spec_title", "commit")} for j in board["jobs"]],
+        "jobs": [{k: j.get(k) for k in ("id", "stage", "round", "reason", "spec_title", "commit", "delivery", "pr")}
+                 for j in board["jobs"]],
         "backlog": {"open": sum(1 for e in backlog if not e[1]), "checked": sum(1 for e in backlog if e[1])},
         "dashboard": "cd factory && python -m http.server 8765, then open http://localhost:8765/dashboard.html",
     }
@@ -459,7 +485,8 @@ def job_spec_md(job: dict, ticket: Ticket, deps: list[dict]) -> str:
             ("title", job["title"]), ("spec", job["spec"]), ("spec_title", job["spec_title"]),
             ("code_repo", ticket.meta.get("code_repo") or "—"), ("base_commit", ticket.meta.get("base_commit") or "—"),
             ("start_branch", job["start_branch"]), ("branch", job["branch"]),
-            ("touches", ", ".join(ticket.meta.get("touches") or []) or "—"), ("commit", job["commit"])]
+            ("touches", ", ".join(ticket.meta.get("touches") or []) or "—"), ("commit", job["commit"]),
+            ("delivery", job["delivery"])]
     out = [f"# Job {job['id']}", "", "| Field | Value |", "|---|---|"]
     out += [f"| {k} | {str(v).replace('|', '/')} |" for k, v in rows]
     out += ["", "## Dependencies", ""]
@@ -475,7 +502,7 @@ def job_spec_md(job: dict, ticket: Ticket, deps: list[dict]) -> str:
     return "\n".join(out)
 
 
-def new_job(ticket: Ticket, reviewers: list[str], board: dict, backlog: Backlog) -> dict:
+def new_job(ticket: Ticket, reviewers: list[str], delivery: str, board: dict, backlog: Backlog) -> dict:
     if ticket.human:
         raise HumanTicket(f"{ticket.id} is a [HUMAN] ticket: a person does it, the factory never runs it",
                           ticket=ticket.ref)
@@ -494,7 +521,7 @@ def new_job(ticket: Ticket, reviewers: list[str], board: dict, backlog: Backlog)
         "spec": ticket.spec.ref, "spec_title": ticket.spec.title, "commit": ticket.subject,
         "branch": f"factory/{job_id}", "start_branch": ticket.start_branch,
         "stage": "spec", "round": 0, "builder": None, "reason": None,
-        "reviewers": reviewers, "rounds": [], "files": [], "updated": now(),
+        "reviewers": reviewers, "delivery": delivery, "pr": None, "rounds": [], "files": [], "updated": now(),
     }
     folder = JOBS / job_id
     folder.mkdir(parents=True, exist_ok=True)
@@ -539,7 +566,7 @@ def queue_spec(spec: Spec, board: dict, backlog: Backlog) -> dict:
             "added": added, "skipped": skipped}
 
 
-def new_next(reviewers: list[str], board: dict, backlog: Backlog) -> dict:
+def new_next(reviewers: list[str], delivery: str, board: dict, backlog: Backlog) -> dict:
     waiting = []
     for _, checked, ref, human, _ in list(backlog.entries()):
         if checked:
@@ -549,7 +576,7 @@ def new_next(reviewers: list[str], board: dict, backlog: Backlog) -> dict:
             continue
         try:
             ticket = load_ticket(ref)
-            return new_job(ticket, reviewers, board, backlog) | {"backlog_line": ref}
+            return new_job(ticket, reviewers, delivery, board, backlog) | {"backlog_line": ref}
         except NotReady as e:
             waiting.append({"ticket": ref, "waits_for": e.extra["missing"]})
         except (HumanTicket, OpenJob, FactoryError) as e:
@@ -661,6 +688,169 @@ def merge_cmd(job_id: str) -> dict:
             "pushed": False}
 
 
+# --- draft pull requests -----------------------------------------------------
+
+@dataclass
+class Host:
+    """Where the draft PR goes, found from the origin remote: GitHub (gh) or Azure DevOps (az)."""
+    kind: str                  # github | ado
+    repo: str                  # owner/repo on GitHub, repository name on Azure DevOps
+    org: str | None = None
+    project: str | None = None
+
+    @classmethod
+    def from_origin(cls) -> "Host":
+        url = git("remote", "get-url", "origin", check=False).stdout.strip()
+        if not url:
+            raise FactoryError("no 'origin' remote: a draft PR needs one")
+        if m := ORIGIN_GH.search(url):
+            return cls("github", f"{m.group(1)}/{m.group(2)}")
+        if m := ORIGIN_ADO.search(url) or ORIGIN_ADO_SSH.search(url) or ORIGIN_VS.search(url):
+            org, project, repo = (urllib.parse.unquote(g) for g in m.groups())
+            return cls("ado", repo, org, project)
+        raise FactoryError(f"origin {url} is neither GitHub nor Azure DevOps: no draft PR")
+
+    def _az(self, *args: str) -> list[str]:
+        return ["az", "repos", "pr", *args, "--organization", f"https://dev.azure.com/{self.org}", "-o", "json"]
+
+    def _ado_url(self, number: int) -> str:
+        q = urllib.parse.quote
+        return f"https://dev.azure.com/{q(self.org)}/{q(self.project)}/_git/{q(self.repo)}/pullrequest/{number}"
+
+    def create_cmd(self, branch: str, base: str, title: str, body_file: str) -> list[str]:
+        if self.kind == "github":
+            return ["gh", "pr", "create", "-R", self.repo, "--draft", "--base", base, "--head", branch,
+                    "--title", title, "--body-file", body_file]
+        return self._az("create", "--draft", "true", "--project", self.project, "--repository", self.repo,
+                        "--source-branch", branch, "--target-branch", base, "--title", title,
+                        "--description", f"@{body_file}")
+
+    def update_cmd(self, number: int, title: str, body_file: str) -> list[str]:
+        if self.kind == "github":
+            return ["gh", "pr", "edit", str(number), "-R", self.repo, "--title", title, "--body-file", body_file]
+        return self._az("update", "--id", str(number), "--title", title, "--description", f"@{body_file}")
+
+    def find(self, branch: str) -> dict | None:
+        """The open PR of the branch, if any: a second `pr` updates it instead of opening another."""
+        if self.kind == "github":
+            prs = json.loads(run("gh", "pr", "list", "-R", self.repo, "--head", branch, "--state", "open",
+                                 "--json", "number,url").stdout or "[]")
+            return {"number": prs[0]["number"], "url": prs[0]["url"]} if prs else None
+        prs = json.loads(run(*self._az("list", "--project", self.project, "--repository", self.repo,
+                                       "--source-branch", branch, "--status", "active")).stdout or "[]")
+        return {"number": prs[0]["pullRequestId"], "url": self._ado_url(prs[0]["pullRequestId"])} if prs else None
+
+    def create(self, branch: str, base: str, title: str, body_file: str) -> dict:
+        out = run(*self.create_cmd(branch, base, title, body_file)).stdout.strip()
+        if self.kind == "github":
+            url = out.splitlines()[-1].strip()
+            return {"number": int(url.rstrip("/").rsplit("/", 1)[1]), "url": url}
+        number = json.loads(out)["pullRequestId"]
+        return {"number": number, "url": self._ado_url(number)}
+
+    def update(self, number: int, title: str, body_file: str) -> None:
+        run(*self.update_cmd(number, title, body_file))
+
+    def state(self, number: int) -> str:
+        """OPEN, MERGED or CLOSED (closed or abandoned without merge)."""
+        if self.kind == "github":
+            return json.loads(run("gh", "pr", "view", str(number), "-R", self.repo, "--json", "state").stdout)["state"]
+        status = json.loads(run(*self._az("show", "--id", str(number))).stdout)["status"]
+        return {"active": "OPEN", "completed": "MERGED"}.get(status, "CLOSED")
+
+
+def sections(text: str) -> list[tuple[str, str]]:
+    """(title, body) of every `## ` section of a markdown file."""
+    heads = list(MD_SECTION.finditer(text))
+    return [(h.group(1).strip(), text[h.end():heads[i + 1].start() if i + 1 < len(heads) else len(text)].strip())
+            for i, h in enumerate(heads)]
+
+
+def pr_body(job: dict, escalated: bool) -> str:
+    folder = JOBS / job["id"]
+    read = lambda name: (folder / name).read_text(encoding="utf-8") if (folder / name).is_file() else ""
+    build, decision = read("build.md"), read("decision.md")
+    out = []
+    if escalated:
+        out += [f"> **Escalated: a human decides.** {job.get('reason') or 'See the decision below.'}", ""]
+    # No bare key here: `#41` would link to an issue or work item of the code repository.
+    out += [f"- Ticket: {job['ticket_id']} — {job['ticket']}",
+            f"- Spec: {job['spec_title']} — {job['spec']}",
+            f"- Job: `{job['id']}`, `{job['branch']}` → `{job['start_branch']}`", ""]
+
+    parts = dict(sections(build))
+    rounds = [(t, b) for t, b in sections(build) if t.startswith("Round ")]
+    if rounds:
+        out += [f"## Proof — {rounds[-1][0]}", "", rounds[-1][1], ""]
+    elif "Proof" in parts:
+        out += ["## Proof", "", parts["Proof"], ""]
+    if not rounds and "Test counts" in parts:
+        out += ["## Test counts", "", parts["Test counts"], ""]
+
+    if job["rounds"]:
+        names = list(dict.fromkeys(n for r in job["rounds"] for n in r))
+        out += ["## Reviews", "", "| Round | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
+        out += [f"| {i} | " + " | ".join(r.get(n, "—") for n in names) + " |" for i, r in enumerate(job["rounds"], 1)]
+        out.append("")
+    if decision:
+        lines = decision.splitlines()
+        kept = [l for l in lines[1:] if not l.startswith("# ")]
+        out += [f"## Decision: {lines[0].strip()}", "", "\n".join(kept).strip(), ""]
+    out.append(f"Draft opened by the JidoTa code factory. Job files: `factory/jobs/{job['id']}/` in the "
+               "code repository (not committed). Marking it ready, approving and completing it stay human.")
+    return "\n".join(out).strip() + "\n"
+
+
+def pr_cmd(job_id: str, escalated: bool, dry_run: bool) -> dict:
+    board = load_board()
+    job = find_job(board, job_id)
+    host = Host.from_origin()
+    if git("rev-parse", "--verify", "--quiet", f"refs/heads/{job['branch']}", check=False).returncode != 0:
+        raise FactoryError(f"branch {job['branch']} does not exist")
+    if not dry_run and (changes := dirty()):
+        raise FactoryError("the working tree has uncommitted changes, PR refused", changes=changes)
+
+    body = pr_body(job, escalated)
+    if host.kind == "ado" and len(body) > ADO_DESCRIPTION_MAX:
+        body = body[:ADO_DESCRIPTION_MAX - 80] + f"\n\n… truncated: see factory/jobs/{job_id}/\n"
+    push = ["git", "push", "-u", "origin", job["branch"]]
+    title, base, existing = job["commit"], job["start_branch"], job.get("pr")
+    if dry_run:
+        cmd = (host.update_cmd(existing["number"], title, "<body file>") if existing
+               else host.create_cmd(job["branch"], base, title, "<body file>"))
+        return {"job": job_id, "dry_run": True, "host": host.kind, "push": push, "pr": cmd, "body": body}
+
+    try:
+        pushed = git(*push[1:], check=False)
+        if pushed.returncode != 0:
+            raise FactoryError(f"push of {job['branch']} rejected: {pushed.stderr.strip() or pushed.stdout.strip()}")
+        existing = existing or host.find(job["branch"])
+        fd, path = tempfile.mkstemp(suffix=".md")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(body)
+            if existing:
+                host.update(existing["number"], title, path)
+                pr = existing
+            else:
+                pr = host.create(job["branch"], base, title, path)
+        finally:
+            os.unlink(path)
+    except FactoryError as e:
+        job["stage"], job["reason"] = "needs-human", f"draft PR failed: {e}"
+        touch(job)
+        save_board(board)
+        raise FactoryError(str(e), job=job_id, stage="needs-human")
+
+    job["pr"] = {"url": pr["url"], "number": pr["number"], "host": host.kind}
+    if not escalated:
+        job["stage"], job["reason"] = "pr", None
+    touch(job)
+    save_board(board)
+    return {"job": job_id, "host": host.kind, "pr": job["pr"], "updated": bool(existing), "stage": job["stage"],
+            "pushed": job["branch"]}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -668,6 +858,7 @@ def main() -> int:
     p = sub.add_parser("new")
     p.add_argument("target", help="ticket, spec, or 'next'")
     p.add_argument("--reviewers", default=DEFAULT_REVIEWERS)
+    p.add_argument("--delivery", choices=DELIVERIES, default="merge")
     p = sub.add_parser("round")
     p.add_argument("job")
     p.add_argument("n", type=int)
@@ -679,6 +870,10 @@ def main() -> int:
     p.add_argument("--builder")
     p = sub.add_parser("merge")
     p.add_argument("job")
+    p = sub.add_parser("pr")
+    p.add_argument("job")
+    p.add_argument("--escalated", action="store_true", help="ESCALATE: stage stays needs-human, reasons on top")
+    p.add_argument("--dry-run", action="store_true", help="print the push and the gh / az command, change nothing")
     sys.stdout.reconfigure(encoding="utf-8")
     args = ap.parse_args()
 
@@ -691,15 +886,17 @@ def main() -> int:
             board, backlog = load_board(), Backlog.load()
             reviewers = [r.strip() for r in args.reviewers.split(",") if r.strip()]
             if args.target == "next":
-                out = new_next(reviewers, board, backlog)
+                out = new_next(reviewers, args.delivery, board, backlog)
             else:
                 target = load_target(args.target)
                 out = (queue_spec(target, board, backlog) if isinstance(target, Spec)
-                       else new_job(target, reviewers, board, backlog))
+                       else new_job(target, reviewers, args.delivery, board, backlog))
         elif args.cmd == "round":
             out = round_cmd(args.job, args.n, args.max_rework)
         elif args.cmd == "set":
             out = set_cmd(args.job, args.stage, args.reason, args.builder)
+        elif args.cmd == "pr":
+            out = pr_cmd(args.job, args.escalated, args.dry_run)
         else:
             out = merge_cmd(args.job)
     except FactoryError as e:

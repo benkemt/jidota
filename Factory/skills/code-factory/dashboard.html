@@ -35,9 +35,10 @@
   .spec-chip.on b { color: var(--accent); }
   .attention { margin: 0 20px 12px; padding: 10px; border-radius: 10px; background: var(--warn-bg);
                display: flex; gap: 10px; flex-wrap: wrap; }
+  .attention[hidden] { display: none; }
   .attention > h2 { width: 100%; margin: 0 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--warn); }
   .attention .card { width: 300px; }
-  .board { display: grid; grid-template-columns: repeat(5, minmax(220px, 1fr)); gap: 12px; padding: 0 20px 24px; overflow-x: auto; }
+  .board { display: grid; grid-template-columns: repeat(6, minmax(200px, 1fr)); gap: 12px; padding: 0 20px 24px; overflow-x: auto; }
   .col { min-width: 0; }
   .col h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 4px 2px 8px;
             display: flex; justify-content: space-between; }
@@ -81,7 +82,9 @@
   .doc :not(pre) > code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
   .doc blockquote { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--muted); }
   .doc a { color: var(--accent); }
-  @media (max-width: 700px) { .board { grid-template-columns: repeat(5, 260px); } .attention .card { width: 100%; } }
+  .card .pr { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--accent); text-decoration: none; }
+  .card .pr:hover { text-decoration: underline; }
+  @media (max-width: 700px) { .board { grid-template-columns: repeat(6, 260px); } .attention .card { width: 100%; } }
 </style>
 </head>
 <body>
@@ -99,7 +102,7 @@
   <div class="doc" id="d-doc"></div>
 </aside>
 <script>
-const COLUMNS = ["spec", "build", "review", "approve", "done"];
+const COLUMNS = ["spec", "build", "review", "approve", "pr", "done"];
 const ATTENTION = ["needs-human", "blocked"];
 let board = { jobs: [] }, lastText = "", openJob = null, openFile = null;
 
@@ -153,6 +156,12 @@ function card(j) {
     c.append(rs);
   }
   if (j.reason) c.append(el("div", "reason", esc(j.reason)));
+  if (j.pr && /^https?:\/\//.test(j.pr.url)) {
+    const a = el("a", "pr", `draft PR #${esc(j.pr.number)} ↗`);
+    a.href = j.pr.url; a.target = "_blank"; a.rel = "noopener";
+    a.onclick = e => e.stopPropagation();
+    c.append(a);
+  }
   c.append(el("div", "spec", `${esc(j.id)} · ${esc(ago(j.updated))}`));
   c.onclick = () => openDrawer(j.id);
   return c;
@@ -202,7 +211,7 @@ function renderDrawer(reload) {
   if (!j) { d.classList.remove("open"); return; }
   d.classList.add("open");
   document.getElementById("d-title").textContent = `${j.ticket_id} — ${j.title}`;
-  document.getElementById("d-sub").textContent = `${j.id} · ${j.stage}${j.reason ? " · " + j.reason : ""} · ${j.branch} → ${j.start_branch}`;
+  document.getElementById("d-sub").textContent = `${j.id} · ${j.stage}${j.reason ? " · " + j.reason : ""} · ${j.branch} → ${j.start_branch}${j.pr ? " · PR " + j.pr.url : ""}`;
   const files = j.files || [];
   if (!openFile || !files.includes(openFile)) { openFile = files[files.length - 1] || null; reload = true; }
   const tabs = document.getElementById("d-tabs");

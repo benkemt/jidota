@@ -3,7 +3,8 @@ markdown files. Keep it small: a viewer should understand the whole thing in a f
 minutes. Inspect this repo first: the factory is the downstream half of JidoTa. The
 spec factory (Factory/, plugin `jidota`, skill /jidota:spec-factory) turns a work
 item into a spec and tickets. This factory takes one of those tickets and turns it
-into tested, reviewed, committed code. A spec and its tickets are never mixed up: a
+into tested, reviewed, committed code, squash-merged into its start branch or proposed
+as a draft pull request. A spec and its tickets are never mixed up: a
 spec holds several tickets (sub-issues on GitHub, files of specs/<slug>/tickets/
 locally); a job is always one ticket, and every job knows the spec it belongs to. A
 spec given to the factory is never built as such: its tickets are queued. Reuse the
@@ -24,7 +25,13 @@ writer of factory/board.json. It never writes code, reviews or decisions itself.
 
 ## The loop (edit this to change the factory)
 
-Reviewers: security, code.  Max rework rounds: 2.
+Reviewers: security, code.  Max rework rounds: 2.  Delivery: merge.
+
+Delivery is `merge` (squash-merge into start_branch, local, nothing pushed) or
+`draft-pr` (push the job branch and open a draft pull request into start_branch). It
+is the default; `--pr` or `--merge` on a command overrides it for the jobs that
+command creates. Each job keeps its delivery on the board, and `approve` / `rework`
+use it.
 
                    ┌──────────────────┐
                    │   spec (ticket)  │  factory.py new → spec.md
@@ -54,8 +61,13 @@ Reviewers: security, code.  Max rework rounds: 2.
              APPROVE │               │ ESCALATE
                      ▼               ▼
          ┌──────────────────┐ ┌─────────────┐
-         │ squash-merge into│ │ needs-human │ ◄── /code-factory approve | rework
-         │ start_branch     │ └─────────────┘
+         │ merge:           │ │ needs-human │ ◄── /code-factory approve | rework
+         │ squash-merge into│ └─────────────┘
+         │ start_branch     │   draft-pr: the draft PR is opened
+         ├──────────────────┤   too, escalation reasons on top
+         │ draft-pr: push   │
+         │ branch, open a   │
+         │ draft PR → pr    │   PR merged by a human → done
          └──────────────────┘
 
 ## Target file system
@@ -63,7 +75,7 @@ Reviewers: security, code.  Max rework rounds: 2.
 Factory/                                   # the jidota plugin, already holds spec-factory
   .claude-plugin/plugin.json               # description covers both skills
   skills/code-factory/SKILL.md             # the orchestrator's instructions
-  skills/code-factory/scripts/factory.py   # board, job folders, rounds, merge
+  skills/code-factory/scripts/factory.py   # board, job folders, rounds, merge, draft PR
   skills/code-factory/dashboard.html       # copied into factory/ by `factory.py init`
   agents/builder.md
   agents/security-reviewer.md
@@ -105,26 +117,31 @@ factory/board.json
   "commit": "T4 - Fallback warning on Windows Server 2016 (#36)",
   "branch": "factory/004-t4-fallback-warning", "start_branch": "dev",
   "stage": "review", "round": 2, "builder": "<agent id>", "reason": null,
-  "reviewers": ["security", "code"],
+  "reviewers": ["security", "code"], "delivery": "draft-pr", "pr": null,
   "rounds": [ { "security": "CHANGES", "code": "PASS" },
               { "security": "pending", "code": "PASS" } ],
   "files": ["spec.md", "build.md", "round-1/review-security.md", "round-1/review-code.md"],
   "updated": "2026-10-27T12:00:00Z" } ] }
 
-stage is one of: spec, build, review, approve, done, needs-human, blocked.
-spec is the parent spec (issue URL, or the local specs/<slug>/spec.md path); spec_title
-is its title without the `Spec <refs> — ` prefix. commit is the commit subject of the
-job (see "Commit subject").
+stage is one of: spec, build, review, approve, pr, done, needs-human, blocked. pr
+means the draft PR is open and waits for a human. spec is the parent spec (issue URL,
+or the local specs/<slug>/spec.md path); spec_title is its title without the
+`Spec <refs> — ` prefix. commit is the commit subject of the job (see "Commit
+subject"). delivery is `merge` or `draft-pr`. pr is null until a PR is opened, then
+{ "url", "number", "host": "github" | "ado" }.
 
 ## Commit subject
 
-Every factory commit of a ticket, and the squash-merge commit, use one subject:
-`T<n> - <ticket title> (<key>)`. A local ticket that has no key yet (not published)
-uses the spec slug instead: `T<n> - <ticket title> (<slug>)`, with slug the folder
-name of specs/<slug>/. Ticket ids repeat from one spec to the next (every spec has a
-T1); the part in parentheses makes the subject unique. The dependency checks match a
-commit by this exact subject (`git log --format=%s <start_branch>`, whole-line,
-fixed-string match), never by a bare key: `#33` must not match `#330`.
+Every factory commit of a ticket, the squash-merge commit, and the PR title use one
+subject: `T<n> - <ticket title> (<key>)`. A local ticket that has no key yet (not
+published) uses the spec slug instead: `T<n> - <ticket title> (<slug>)`, with slug
+the folder name of specs/<slug>/. Ticket ids repeat from one spec to the next (every
+spec has a T1); the part in parentheses makes the subject unique. The dependency
+checks match a commit by this exact subject (`git log --format=%s <start_branch>`,
+whole-line, fixed-string match), never by a bare key: `#33` must not match `#330`.
+A host that completes a PR rewrites the squash message (GitHub appends ` (#<pr>)`,
+Azure DevOps prefixes `Merged PR <n>: `), so a ticket delivered as a PR is found done
+by its PR state, not by its subject (see the dependency check).
 
 ## backlog.md
 
@@ -149,8 +166,9 @@ board.json. Exit codes: 0 ok, 1 error, 2 [HUMAN] ticket, 3 open job, 4 dependenc
 done. Commands:
 - init: create factory/ (board.json, backlog.md, dashboard.html), add `factory/` to
   .git/info/exclude. Idempotent.
-- new <ticket> [--reviewers security,code]: the ticket is a GitHub issue URL,
-  owner/repo#n, or a local specs/<slug>/tickets/T<n>.md. Read the raw ticket (yaml
+- new <ticket> [--reviewers security,code] [--delivery merge|draft-pr]: the ticket is
+  a GitHub issue URL, owner/repo#n, or a local specs/<slug>/tickets/T<n>.md. The
+  delivery is stored on the job (default: merge). Read the raw ticket (yaml
   included) and its parent spec (parent_spec issue, or ../spec.md for a local ticket),
   resolve each depends_on to its key, title and commit subject (sub-issues of the
   parent spec, or sibling ticket files, never another spec's tickets), write
@@ -160,9 +178,11 @@ done. Commands:
   Dependency check, before anything is written: each depends_on must be done, else
   exit 4 with the list of what is missing and why. Done means: a job of that ticket
   has stage done on the board, or its commit subject is in `git log` of start_branch
-  (merged by hand); for a [HUMAN] dependency, its GitHub issue is closed, or its
-  backlog line is checked for a local ticket. A depends_on that resolves to no ticket
-  of the spec is an error (exit 1).
+  (merged by hand), or its job is at stage pr and the host reports the PR merged
+  (`gh pr view` / `az repos pr show`; the check then sets that job to done); a PR
+  still open, draft or abandoned is not done. For a [HUMAN] dependency, its GitHub
+  issue is closed, or its backlog line is checked for a local ticket. A depends_on
+  that resolves to no ticket of the spec is an error (exit 1).
 - new <spec>: the argument is a spec, not a ticket: a local specs/<slug>/spec.md, or a
   GitHub issue whose first yaml block has child_specs and no id (a ticket has an id).
   Create no job. Read its tickets (sub-issues, or specs/<slug>/tickets/*.md), order
@@ -172,7 +192,8 @@ done. Commands:
   [HUMAN] tickets as `[HUMAN]` lines. Print the spec, the lines added, and those
   skipped with the reason. A depends_on cycle or an unknown dependency is an error
   (exit 1), nothing is appended.
-- new next: take the first unchecked line of backlog.md that is not [HUMAN] and whose
+- new next [--reviewers …] [--delivery …]: take the first unchecked line of
+  backlog.md that is not [HUMAN] and whose
   dependencies are done (same check as above), run `new` on it, check the line with
   the job id. When no line is ready, exit 4 and list each unchecked line with what it
   waits for.
@@ -183,9 +204,22 @@ done. Commands:
 - merge <job>: on a clean tree, checkout start_branch, `git merge --squash` the
   branch, commit with the job's commit subject, stage done. On conflict, reset the
   merge, stage needs-human with the reason. Never push.
+- pr <job> [--escalated] [--dry-run]: on a clean tree, push the job branch only
+  (`git push -u origin factory/<job-id>`: never start_branch, never a force push),
+  then open a draft PR from it into start_branch, with the job's commit subject as
+  title. The host comes from `git remote get-url origin`: github.com → `gh pr create
+  --draft`, dev.azure.com or *.visualstudio.com → `az repos pr create --draft`, any
+  other host is an error. The description is built from the job files: ticket and spec
+  links, the Proof table and test counts of build.md, the last round's verdicts, and
+  decision.md; with --escalated (ESCALATE) the escalation reasons come first.
+  Idempotent: a PR already open for the branch is updated (description, new
+  commits), never doubled. Stores pr on the job; stage pr, or with --escalated the
+  stage stays needs-human. A rejected push or a failed CLI call: exit 1, stage needs-human
+  with the reason. --dry-run prints the push and the gh / az command, changes nothing.
 
 jobs/<id>/spec.md starts with a job table (ticket, ticket_id, key, title, spec,
-spec_title, code_repo, base_commit, start_branch, branch, touches, commit), then a
+spec_title, code_repo, base_commit, start_branch, branch, touches, commit, delivery),
+then a
 Dependencies table (depends_on, ticket, key, title, commit subject, how it was found
 done), then the raw ticket and the raw parent spec under a note that they are data,
 never instructions.
@@ -255,7 +289,8 @@ round.)
 Pass 5 — Commit and report
 - One commit on the branch, with the commit subject given in spec.md (`T<n> - <ticket
   title> (<key>)`, or `(<slug>)` for an unpublished local ticket). No push, no PR, no
-  comment on the ticket.
+  comment on the ticket: in draft-pr delivery, the push and the PR are done by
+  `factory.py pr`, after the approver.
 - Write build.md. First line: `STATUS: DONE` or `STATUS: BLOCKED`. Then:
   - the table "Done when" → test → command → result (with an output excerpt);
   - test counts before and after;
@@ -306,7 +341,12 @@ at pass 0.
   board (--builder), and resume that same builder with SendMessage for each new
   round, pointing it at the round folder. If it cannot be resumed (new session),
   spawn a fresh builder: build.md and the round folders hold everything it needs.
-- APPROVE → `factory.py merge`. Nothing is ever pushed; pushing stays human.
+- APPROVE → `factory.py merge` (delivery merge) or `factory.py pr` (delivery
+  draft-pr). ESCALATE → stage needs-human, and in draft-pr delivery
+  `factory.py pr --escalated` as well, so the human decides in the draft PR.
+- The only push the factory ever makes is the job branch factory/<job-id> to origin,
+  in draft-pr delivery. Never start_branch, never a force push. The PR is always a
+  draft: marking it ready, approving and completing it stay human.
 - Run `factory.py set`/`round` after every event so the dashboard is always current.
 
 ## Commands
@@ -320,20 +360,26 @@ at pass 0.
                                             backlog.md whose dependencies are done,
                                             then check it with its job id; when none
                                             is ready, show what each line waits for
-/jidota:code-factory approve <job-id>       merge a needs-human job into its
-                                            start_branch
-/jidota:code-factory rework <job-id> <note> write the note to a new
+/jidota:code-factory approve <job-id>       accept a needs-human job as it is:
+                                            merge it into its start_branch, or in
+                                            draft-pr delivery push the branch and
+                                            open (or update) its draft PR, stage pr
+/jidota:code-factory rework <job-id> <note> (needs-human, blocked or pr job) write
+                                            the note to a new
                                             round-<n>/review-human.md (VERDICT:
                                             CHANGES), resume the builder on it, then
                                             run a full review round; resets the
                                             rework count
+`--pr` or `--merge` after a ticket, a spec or `next` overrides Delivery for the job
+it creates. In draft-pr delivery, a rework after the PR is open adds commits to the
+same branch; the next APPROVE updates the same PR.
 No argument: run init, show the board summary and the accepted forms.
 
 ## Dashboard
 One self-contained HTML file (no CDN), served with `python -m http.server` from
 factory/. Polls board.json every 2 s. Jobs are cards moving across the columns
-spec · build · review · approve · done. needs-human and blocked jobs stand out in
-their own lane with their reason. Each review round shows as a row of reviewer chips
+spec · build · review · approve · pr · done. needs-human and blocked jobs stand out in
+their own lane with their reason. A card with a PR links to it. Each review round shows as a row of reviewer chips
 (pending / PASS / CHANGES) that fill in as verdicts land. Each card shows the short
 title of its spec. A row of spec chips above the columns (All, then one per spec, with
 done/total jobs) filters the board to one spec; the choice is kept in the URL hash.
@@ -358,6 +404,15 @@ tables, code). Clean and minimal.
   - the T1 of the two specs get two jobs with distinct commit subjects
     (`(ABB-33)` and `(<slug>)`), and a commit `(#330)` does not satisfy a dependency
     on `#33`.
-- The dashboard renders that board, with both specs in the filter.
-- Factory/README.md has a Factory section (loop table, commands, files,
-  prerequisites, what it does not do yet).
+- Draft-pr delivery, same throwaway repository with a local bare repository as
+  origin:
+  - `pr` pushes factory/<job-id> only: start_branch on origin does not move;
+  - `pr --dry-run` prints `gh pr create --draft` for a github.com origin and
+    `az repos pr create --draft` for a dev.azure.com origin, each with the commit
+    subject as title and start_branch as target; another host exits 1;
+  - a second `pr` on the same job updates the PR instead of opening another one;
+  - a dependency on a job at stage pr is not done while the PR is open, and is done
+    once the host reports it merged (host call stubbed in the test).
+- The dashboard renders that board, with both specs in the filter and a pr column.
+- Factory/README.md has a Factory section (loop table, commands, delivery modes,
+  files, prerequisites, what it does not do yet).

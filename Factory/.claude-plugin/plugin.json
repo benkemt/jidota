@@ -1,7 +1,7 @@
 {
   "name": "jidota",
   "version": "0.1.0",
-  "description": "JidoTa: the spec factory turns an Azure DevOps work item or a GitHub issue into a spec and child tickets published as GitHub issues; the code factory turns one ticket into tested, reviewed, squash-merged code.",
+  "description": "JidoTa: the spec factory turns an Azure DevOps work item or a GitHub issue into a spec and child tickets published as GitHub issues; the code factory turns one ticket into tested, reviewed code, squash-merged or proposed as a draft pull request.",
   "author": {
     "name": "Benjamin Moiroud"
   },
