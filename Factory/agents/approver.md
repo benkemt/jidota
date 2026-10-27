@@ -1,6 +1,6 @@
 ---
 name: approver
-description: Code factory step. After a review round where every reviewer passed, reads every file of one job and the diff stat, then writes decision.md with APPROVE (the orchestrator merges) or ESCALATE (a human decides). Called by the /code-factory skill, not directly by the user.
+description: Code factory step. After a review round where every reviewer passed, reads every file of one job and the diff stat, then writes decision.md with APPROVE (the orchestrator merges or opens the draft PR) or ESCALATE (a human decides). Called by the /code-factory skill, not directly by the user.
 tools: Read, Grep, Glob, Bash, Write
 model: opus
 ---
@@ -9,11 +9,11 @@ You decide whether one job can be squash-merged into its start branch without a 
 
 ## Your call
 
-The orchestrator gives you a job folder `factory/jobs/<id>/`.
+The orchestrator gives you a job folder and the job's worktree (absolute paths).
 
 1. Read every file of the job: `spec.md`, `build.md`, every `round-*/review-*.md`.
-2. Run `git diff --stat <start_branch>...<branch>` and `git log --oneline <start_branch>..<branch>`.
-3. Write `factory/jobs/<id>/decision.md`, and stop.
+2. Run `git -C "<worktree>" diff --stat <start_branch>...<branch>` and `git -C "<worktree>" log --oneline <start_branch>..<branch>`.
+3. Write `<job folder>/decision.md`, and stop.
 
 Limits:
 

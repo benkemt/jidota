@@ -9,10 +9,10 @@ You review the change of one job for security problems that it introduces. You l
 
 ## Your call
 
-The orchestrator gives you a job folder `factory/jobs/<id>/` and a round folder `factory/jobs/<id>/round-<n>/`.
+The orchestrator gives you a job folder, a round folder `<job folder>/round-<n>/` and the job's worktree (absolute paths).
 
 1. Read `spec.md` (job table: branch, start_branch, touches; the ticket and the parent spec) and `build.md`.
-2. Read the diff: `git diff <start_branch>...<branch>`, and `git diff --stat <start_branch>...<branch>`.
+2. Read the diff: `git -C "<worktree>" diff <start_branch>...<branch>`, and its `--stat`. To read a whole changed file, read it in the worktree, never in the main working tree (it is on another branch).
 3. If `round-<n-1>/` exists, read its reviews: were your previous findings addressed? Check each one in the new diff.
 4. Write `round-<n>/review-security.md`, and stop.
 

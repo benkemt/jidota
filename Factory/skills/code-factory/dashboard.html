@@ -27,6 +27,8 @@
   header .meta { color: var(--muted); font-size: 12px; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pass); margin-right: 6px; }
   .dot.off { background: var(--changes); }
+  .running { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--pending-bg); color: var(--muted); }
+  .running.full { background: var(--warn-bg); color: var(--warn); }
   .specs { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 20px 12px; }
   .spec-chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px;
                padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
@@ -90,6 +92,7 @@
 <body>
 <header>
   <h1>Code factory</h1>
+  <span class="running" id="running" title="Jobs at spec, build, review or approve, against Parallel jobs"></span>
   <span class="meta"><span id="dot" class="dot"></span><span id="status">loading board.json…</span></span>
 </header>
 <nav class="specs" id="specs"></nav>
@@ -104,6 +107,7 @@
 <script>
 const COLUMNS = ["spec", "build", "review", "approve", "pr", "done"];
 const ATTENTION = ["needs-human", "blocked"];
+const RUNNING = ["spec", "build", "review", "approve"];
 let board = { jobs: [] }, lastText = "", openJob = null, openFile = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -167,7 +171,15 @@ function card(j) {
   return c;
 }
 
+function renderRunning() {
+  const n = board.jobs.filter(j => RUNNING.includes(j.stage)).length, max = board.max_parallel;
+  const r = document.getElementById("running");
+  r.textContent = max ? `running ${n} / ${max}` : `running ${n}`;
+  r.className = "running" + (max && n >= max ? " full" : "");
+}
+
 function render() {
+  renderRunning();
   renderSpecs();
   const current = selectedSpec();
   const jobs = board.jobs.filter(j => !current || j.spec === current);
@@ -211,7 +223,7 @@ function renderDrawer(reload) {
   if (!j) { d.classList.remove("open"); return; }
   d.classList.add("open");
   document.getElementById("d-title").textContent = `${j.ticket_id} — ${j.title}`;
-  document.getElementById("d-sub").textContent = `${j.id} · ${j.stage}${j.reason ? " · " + j.reason : ""} · ${j.branch} → ${j.start_branch}${j.pr ? " · PR " + j.pr.url : ""}`;
+  document.getElementById("d-sub").textContent = `${j.id} · ${j.stage}${j.reason ? " · " + j.reason : ""} · ${j.branch} → ${j.start_branch}${j.worktree ? " · worktree " + j.worktree : ""}${j.pr ? " · PR " + j.pr.url : ""}`;
   const files = j.files || [];
   if (!openFile || !files.includes(openFile)) { openFile = files[files.length - 1] || null; reload = true; }
   const tabs = document.getElementById("d-tabs");
