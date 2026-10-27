@@ -10,7 +10,7 @@ repository whose code the work item changes, with the plugin loaded for the sess
 
 ```powershell
 cd D:\Source\Repos\<target-repo>
-claude --plugin-dir D:\Source\Repos\jidota\SpecFactory
+claude --plugin-dir D:\Source\Repos\jidota\Factory
 ```
 
 Then:

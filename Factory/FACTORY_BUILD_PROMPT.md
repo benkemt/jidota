@@ -1,13 +1,13 @@
 Build a simple, visual "software factory" using a Claude Code skill, subagents, and
 markdown files. Keep it small: a viewer should understand the whole thing in a few
 minutes. Inspect this repo first: the factory is the downstream half of JidoTa. The
-spec factory (SpecFactory/, plugin `jidota`, skill /jidota:spec-factory) turns a work
+spec factory (Factory/, plugin `jidota`, skill /jidota:spec-factory) turns a work
 item into a spec and tickets. This factory takes one of those tickets and turns it
 into tested, reviewed, committed code. A spec and its tickets are never mixed up: a
 spec holds several tickets (sub-issues on GitHub, files of specs/<slug>/tickets/
 locally); a job is always one ticket, and every job knows the spec it belongs to. A
 spec given to the factory is never built as such: its tickets are queued. Reuse the
-conventions of SpecFactory/: agent
+conventions of Factory/: agent
 style and language (English), script style, the ticket frame (`# T<n> — title`, first
 yaml block with id, key, parent_spec, depends_on, code_repo, base_commit,
 start_branch, touches; sections Done when / How to check / Agent notes / Out of scope).
@@ -15,8 +15,8 @@ Do not use existing user skills.
 
 ## The orchestrator
 
-The factory is a second skill of the `jidota` plugin (SpecFactory/), next to
-spec-factory: /jidota:code-factory. One `--plugin-dir SpecFactory` gives both
+The factory is a second skill of the `jidota` plugin (Factory/), next to
+spec-factory: /jidota:code-factory. One `--plugin-dir Factory` gives both
 /jidota:spec-factory and /jidota:code-factory. It runs from the root
 of the code repository the ticket changes. Whichever Claude Code session runs it
 becomes the orchestrator: it runs the loop below, spawns every agent, and is the only
@@ -60,7 +60,7 @@ Reviewers: security, code.  Max rework rounds: 2.
 
 ## Target file system
 
-SpecFactory/                               # the jidota plugin, already holds spec-factory
+Factory/                                   # the jidota plugin, already holds spec-factory
   .claude-plugin/plugin.json               # description covers both skills
   skills/code-factory/SKILL.md             # the orchestrator's instructions
   skills/code-factory/scripts/factory.py   # board, job folders, rounds, merge
@@ -89,7 +89,7 @@ SpecFactory/                               # the jidota plugin, already holds sp
 
 ## Example files
 
-SpecFactory/agents/<name>.md  (Claude Code subagent syntax, like spec-writer.md)
+Factory/agents/<name>.md  (Claude Code subagent syntax, like spec-writer.md)
 ---
 name: example-agent
 description: Factory step. One line on when the orchestrator uses this agent. Called by the /code-factory skill, not directly by the user.
@@ -343,7 +343,7 @@ tables, code). Clean and minimal.
 
 ## Done when
 - Each agent file, the skill, the script and the dashboard exist at the paths above,
-  inside SpecFactory/; no other plugin folder is created.
+  inside Factory/; no other plugin folder is created.
 - `factory.py` runs end to end on the sample tickets of Graph/tickets/ copied as a
   local ticket folder: init, new, round on hand-written review files, set, merge on a
   throwaway branch.
@@ -359,5 +359,5 @@ tables, code). Clean and minimal.
     (`(ABB-33)` and `(<slug>)`), and a commit `(#330)` does not satisfy a dependency
     on `#33`.
 - The dashboard renders that board, with both specs in the filter.
-- SpecFactory/README.md has a Factory section (loop table, commands, files,
+- Factory/README.md has a Factory section (loop table, commands, files,
   prerequisites, what it does not do yet).
