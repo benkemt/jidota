@@ -255,3 +255,35 @@ worktree until it is done (merge removes it; `clean` removes those of jobs whose
 - Close the GitHub issue of a merged ticket, or read `[HUMAN]` status from anything but the issue
   state or the backlog line.
 - Read Linear or Azure DevOps tickets: the tickets come from GitHub or from local files.
+
+## Branch to PR
+
+The `/jidota:branch-to-pr` skill opens a draft pull request from a source branch into a destination
+branch, with a description in a fixed model: What, How, Proof, Not in this PR.
+
+```
+/jidota:branch-to-pr feature/iis-headers dev
+/jidota:branch-to-pr factory/003-t1-remove-server-header dev --title "Remove the Server header"
+```
+
+| Step | Who |
+|---|---|
+| 1. Commits of the source missing from `origin/<destination>`, push needed or not, conflicts, open PR of the same branches | `branch_to_pr.py collect` |
+| 2. Tickets of those commits: subject `T<n> - <title> (<key>)` (a round or a host squash of one too), found on the factory board, then in `specs/*/tickets/`, then as an issue of the `repo` of `~/.claude/spec-factory.json`; their spec, the spec's `(scope)` ADO work items, the job files | `branch_to_pr.py collect` |
+| 3. Read the diff, the tickets and `build.md`, write the description | the session |
+| 4. **The user approves** the title and the description | the session |
+| 5. Push the source branch, open the draft PR (or update the open one), link the ADO scope work items (Azure DevOps host) | `branch_to_pr.py open` |
+
+Without a ticket, only what the diff shows is written: no acceptance criteria, no test counts, no
+"Not in this PR". The skill never runs the build or the tests: every number comes from a recorded
+run (`build.md` of a factory job). It pushes the source branch only, never with force, never the
+destination, and never marks the PR ready. Its work files (`context.json`, copies of the tickets and
+specs, `body.md`) live in `.git/branch-to-pr/<source>/`, out of the working tree.
+
+| Path | Role |
+|---|---|
+| [`skills/branch-to-pr/SKILL.md`](skills/branch-to-pr/SKILL.md) | The description model and where each part comes from |
+| [`skills/branch-to-pr/scripts/branch_to_pr.py`](skills/branch-to-pr/scripts/branch_to_pr.py) | `collect` and `open`. Imports `factory.py` of the code factory for git, tickets, specs and the GitHub / Azure DevOps host. Exit codes: 0 ok, 1 error, 2 nothing to propose |
+
+Prerequisites: those of the draft-pr delivery of the code factory (push rights on `origin`, `gh` or
+`az` with the `azure-devops` extension), and `gh` read access to the spec repository for GitHub tickets.
