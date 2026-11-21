@@ -287,3 +287,39 @@ specs, `body.md`) live in `.git/branch-to-pr/<source>/`, out of the working tree
 
 Prerequisites: those of the draft-pr delivery of the code factory (push rights on `origin`, `gh` or
 `az` with the `azure-devops` extension), and `gh` read access to the spec repository for GitHub tickets.
+
+## Work items
+
+The `/jidota:workitems` skill breaks a source document (audit report, code review, gap analysis,
+spec) down into an Azure DevOps backlog, Epic > Feature > User Story > Task, every item in the same
+fixed format and in English.
+
+```
+/jidota:workitems docs/MISSING_ERROR_LOGS.md
+/jidota:workitems audit.md --org ABB-AU-PPO --project OeeService
+```
+
+| Step | Who |
+|---|---|
+| 1. Organization and project (arguments, else `origin`), process and its work item types, fields and allowed values, area and iteration paths, recent backlog items | `workitems.py target` |
+| 2. Read the document and every file it cites | the session |
+| 3. Ask the user live what the document cannot say: which problem for whom, scope, paths, granularity, severity mapping | the session |
+| 4. Write `plan.json`: hierarchy, titles, descriptions, acceptance criteria, points, priority, risk, Predecessor / Successor links | the session |
+| 5. Check the plan against the rules and the process, every `file:line` and quoted line against the repository; write `proposal.md` | `workitems.py check` |
+| 6. **The user approves** the proposal | the session |
+| 7. Create the items top-down with their parent link, then the Predecessor / Successor links, in batches, resuming after an error | `workitems.py create` |
+
+Every fact of an item comes from the document, from the code at the line cited, or from an answer
+of the user (`answers.md`); what is still unknown goes to the open points, never into a guessed
+sentence. No tags are ever set. `create` refuses a plan changed since its last clean `check`, and
+every value goes to `az` through a file, so no HTML passes through a shell. Its work files
+(`target.json`, `answers.md`, `plan.json`, `proposal.md`, `created.json`, `links.json`) live in
+`.git/workitems/<document>/`, out of the working tree.
+
+| Path | Role |
+|---|---|
+| [`skills/workitems/SKILL.md`](skills/workitems/SKILL.md) | The rules, the live questions and the field format of each level |
+| [`skills/workitems/scripts/workitems.py`](skills/workitems/scripts/workitems.py) | `target`, `check` and `create`. Imports `factory.py` of the code factory for git and the `origin` patterns. Exit codes: 0 ok, 1 error, 3 the plan breaks a rule |
+
+Prerequisites: `az` logged in with the `azure-devops` extension, and the right to create work items
+in the project.
