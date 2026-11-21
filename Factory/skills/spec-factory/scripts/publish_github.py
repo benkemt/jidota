@@ -169,8 +169,10 @@ def add_to_project(project: str, entry: dict, state_path: Path, state: dict) -> 
     try:
         gh("project", "item-add", number, "--owner", owner, "--url", entry["url"])
     except PublishError as e:
-        hint = " Run: gh auth refresh -s project" if "scope" in str(e) else ""
-        raise PublishError(f"{e}{hint}")
+        # A project workflow (auto-add, auto-add sub-issues) may have added the issue already.
+        if "Content already exists in this project" not in str(e):
+            hint = " Run: gh auth refresh -s project" if "scope" in str(e) else ""
+            raise PublishError(f"{e}{hint}")
     entry["in_project"] = True
     save(state_path, state)
 
