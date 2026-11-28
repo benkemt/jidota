@@ -44,7 +44,7 @@ a run; a job can be started, cancelled and released through the API.
 
 ## Automated tests
 
-This ticket is the tests: `dotnet test jidota.sln --filter Category!=Manual` in the pipeline, with
+This ticket is the tests: `dotnet test jidota.slnx --filter Category!=Manual` in the pipeline, with
 Docker available.
 
 ## How to verify

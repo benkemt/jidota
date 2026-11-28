@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Jidota</RootNamespace>
+    <AssemblyName>jidota</AssemblyName>
+
+    <!-- Installed with `dotnet tool install`; the command is `jidota`. -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>jidota</ToolCommandName>
+    <PackageId>jidota</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Benjamin Moiroud</Authors>
+    <Description>JidoTa: the code factory orchestrator. Runs every agent as its own claude -p process, records every run, picks up Ready tickets from a GitHub Project and serves a local dashboard.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/benkemt/jidota</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 2.0.x: the stable API (RootCommand, ParseResult.Invoke) this code is written against. -->
+    <PackageReference Include="System.CommandLine" Version="2.0.15" />
+    <!-- Aligned with the net10.0 target framework. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+  </ItemGroup>
+
+  <!--
+    The Claude Code plugin (agents, skills) ships inside the tool, in a plugin/ folder next to the
+    binaries (AppContext.BaseDirectory). The agent files are read from there to build the
+    instructions of every claude -p run (ARCHITECTURE.md §4 "One agent run"), so one version of
+    jidota is one version of the agents.
+  -->
+  <ItemGroup>
+    <None Include="..\..\Factory\**\*" Exclude="..\..\Factory\**\__pycache__\**;..\..\Factory\**\*.pyc"
+          Link="plugin\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest"
+          Pack="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jidota.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -105,7 +105,7 @@ starts a process, and no module other than `Data/` holds a `DbContext`.
 ```
 jidota/
   ARCHITECTURE.md
-  jidota.sln
+  jidota.slnx
   src/Jidota/
     Cli/          commands (System.CommandLine)
     Web/          local API and Blazor Server dashboard

@@ -1,5 +1,6 @@
 # 01 — Solution scaffold and test conventions
 
+**Status:** done
 **Depends on:** —
 **Reference:** ARCHITECTURE.md §2.1 (Architecture style), §2.2 (Cross-cutting libraries), §4 (Components)
 
@@ -14,7 +15,7 @@ pipeline.
 1. Create at the repository root:
 
    ```
-   jidota.sln
+   jidota.slnx
    src/Jidota/            net10.0, OutputType Exe, PackAsTool, ToolCommandName jidota
      Cli/ Web/ Poller/ Jobs/ Agents/ Recording/ Hosts/ Spec/ BranchToPr/ WorkItems/ Data/
      Program.cs
@@ -34,7 +35,7 @@ pipeline.
    - `[Trait("Category", "Manual")]`: needs a real `claude`, `gh` or `az` account; excluded from
      the pipeline (`--filter Category!=Manual`), run by hand when a ticket says so.
    - Recorded fixtures live in `tests/Jidota.Tests/Fixtures/`.
-   - The pipeline command is `dotnet test jidota.sln --filter Category!=Manual`, with Docker
+   - The pipeline command is `dotnet test jidota.slnx --filter Category!=Manual`, with Docker
      available for `Category=Integration`.
 5. Rule from §2.1: modules use each other through public types only; only `Hosts/` and `Agents/`
    start processes; only `Data/` holds a `DbContext`. Nothing automates it: state it in a short
@@ -53,18 +54,18 @@ pipeline.
 ## How to verify
 
 ```
-dotnet build jidota.sln
-dotnet test jidota.sln --filter Category=Unit
+dotnet build jidota.slnx
+dotnet test jidota.slnx --filter Category=Unit
 dotnet pack src/Jidota -o out && dotnet tool install --tool-path ./tool --add-source out jidota
 ./tool/jidota --help
 ```
 
 ## Acceptance criteria
 
-- [ ] `dotnet build` and `dotnet test` succeed on Windows and Linux with no other prerequisite than
+- [x] `dotnet build` and `dotnet test` succeed on Windows and Linux with no other prerequisite than
       the .NET 10 SDK (Docker only for `Category=Integration`)
-- [ ] `dotnet test --filter Category=Unit` runs without Docker
-- [ ] The packed tool installs and `jidota --help` exits 0
-- [ ] The installed tool contains `plugin/agents/builder.md`, `security-reviewer.md`,
+- [x] `dotnet test --filter Category=Unit` runs without Docker
+- [x] The packed tool installs and `jidota --help` exits 0
+- [x] The installed tool contains `plugin/agents/builder.md`, `security-reviewer.md`,
       `code-reviewer.md`, `approver.md`
-- [ ] The module folders of §2.1 exist; no project other than `src/Jidota` and `tests/Jidota.Tests`
+- [x] The module folders of §2.1 exist; no project other than `src/Jidota` and `tests/Jidota.Tests`

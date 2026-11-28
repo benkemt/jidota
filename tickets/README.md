@@ -4,7 +4,7 @@ These tickets build the `jidota` .NET tool described in [`../ARCHITECTURE.md`](.
 delivering the features of [`../docs/features/code-factory-run-recording.md`](../docs/features/code-factory-run-recording.md).
 They are numbered in execution order; each one is self-contained. Every ticket has a **How to
 verify** and an **Automated tests** section: the tests run in a pipeline with
-`dotnet test jidota.sln --filter Category!=Manual` (the .NET SDK, git and Docker; never a real
+`dotnet test jidota.slnx --filter Category!=Manual` (the .NET SDK, git and Docker; never a real
 `claude`, `gh` or `az` — conventions in ticket 01).
 
 ## Order of execution
